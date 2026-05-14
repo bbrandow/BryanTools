@@ -9,9 +9,11 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     static let barOnlyPanelSize = NSSize(width: 760, height: 76)
     static let minimumPanelSize = NSSize(width: 520, height: 76)
     static let maximumPanelSize = NSSize(width: 1_100, height: 560)
-    static let applicationRowHeight = CGFloat(56)
+    static let applicationRowHeight = CGFloat(60)
     static let calculationRowHeight = CGFloat(100)
-    static let resultBottomPadding = CGFloat(14)
+    static let applicationResultBottomPadding = CGFloat(52)
+    static let calculationResultBottomPadding = CGFloat(20)
+    static let minimumApplicationResultRows = 3
 
     let id = ToolIdentifier.quickTask
     let displayName = ToolIdentifier.quickTask.displayName
@@ -29,16 +31,33 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     @Published var lastErrorMessage: String?
 
     var panelSize: NSSize {
-        if calculationResult != nil || !matches.isEmpty {
-            let resultHeight = calculationResult != nil
-                ? Self.calculationRowHeight
-                : CGFloat(min(matches.count, 6)) * Self.applicationRowHeight
+        if resultContentHeight > 0 {
             return NSSize(
                 width: Self.barOnlyPanelSize.width,
-                height: Self.barOnlyPanelSize.height + 1 + resultHeight + Self.resultBottomPadding
+                height: Self.barOnlyPanelSize.height + 1 + resultContentHeight
             )
         }
         return Self.barOnlyPanelSize
+    }
+
+    var resultContentHeight: CGFloat {
+        if calculationResult != nil {
+            return Self.calculationRowHeight + Self.calculationResultBottomPadding
+        }
+        guard !matches.isEmpty else {
+            return 0
+        }
+        let visibleRows = min(max(matches.count, Self.minimumApplicationResultRows), 6)
+        let dividerHeight = CGFloat(max(matches.count - 1, 0))
+        return CGFloat(visibleRows) * Self.applicationRowHeight
+            + dividerHeight
+            + Self.applicationResultBottomPadding
+    }
+
+    var resultBottomPadding: CGFloat {
+        calculationResult != nil
+            ? Self.calculationResultBottomPadding
+            : Self.applicationResultBottomPadding
     }
 
     private enum HotKeyID {

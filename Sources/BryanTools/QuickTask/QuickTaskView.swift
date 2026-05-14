@@ -125,7 +125,8 @@ struct QuickTaskView: View {
                 }
             }
         }
-        .padding(.bottom, QuickTaskModule.resultBottomPadding)
+        .padding(.bottom, environment.resultBottomPadding)
+        .frame(height: environment.resultContentHeight, alignment: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 

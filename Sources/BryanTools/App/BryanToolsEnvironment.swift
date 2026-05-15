@@ -9,6 +9,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let colorPicker: ColorPickerModule
     let macroText: MacroTextModule
     let quickTask: QuickTaskModule
+    let screenFloat: ScreenFloatModule
     let tools: [any ToolModule]
 
     private lazy var settingsPanelController = BryanToolsSettingsPanelController(environment: self)
@@ -17,13 +18,15 @@ final class BryanToolsEnvironment: ObservableObject {
         clipboardHistory: ClipboardHistoryModule,
         colorPicker: ColorPickerModule,
         macroText: MacroTextModule,
-        quickTask: QuickTaskModule
+        quickTask: QuickTaskModule,
+        screenFloat: ScreenFloatModule
     ) {
         self.clipboardHistory = clipboardHistory
         self.colorPicker = colorPicker
         self.macroText = macroText
         self.quickTask = quickTask
-        self.tools = [clipboardHistory, colorPicker, macroText, quickTask]
+        self.screenFloat = screenFloat
+        self.tools = [clipboardHistory, colorPicker, macroText, quickTask, screenFloat]
     }
 
     func start() {
@@ -47,7 +50,8 @@ final class BryanToolsEnvironment: ObservableObject {
             clipboardHistory: ClipboardHistoryModule.shared,
             colorPicker: ColorPickerModule.shared,
             macroText: MacroTextModule.shared,
-            quickTask: QuickTaskModule.shared
+            quickTask: QuickTaskModule.shared,
+            screenFloat: ScreenFloatModule.shared
         )
     }
 }

@@ -30,9 +30,10 @@ struct HistoryView: View {
         .onAppear {
             environment.refreshSearch()
             selectedID = environment.searchResults.first?.id
-            DispatchQueue.main.async {
-                searchFocused = true
-            }
+            focusSearchField()
+        }
+        .onChange(of: environment.focusRequestID) { _, _ in
+            focusSearchField()
         }
         .onChange(of: environment.searchResults) { _, newResults in
             if selectedID == nil || !newResults.contains(where: { $0.id == selectedID }) {
@@ -87,16 +88,17 @@ struct HistoryView: View {
                             HistoryRow(
                                 record: record,
                                 thumbnailURL: environment.thumbnailURL(for: record),
-                                isSelected: record.id == selectedID
-                            )
-                            .id(record.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
+                                isSelected: record.id == selectedID,
+                                canFloatImage: environment.canFloatImage(record)
+                            ) {
+                                environment.floatImage(record)
+                                environment.closeHistory()
+                            } copy: {
+                                environment.copyToClipboard(record)
+                            } select: {
                                 selectedID = record.id
                             }
-                            .onTapGesture(count: 2) {
-                                environment.copyToClipboard(record)
-                            }
+                            .id(record.id)
                         }
                     }
                 }
@@ -163,6 +165,12 @@ struct HistoryView: View {
             return true
         case 36, 76:
             if let selectedRecord {
+                if event.modifierFlags.contains(.command),
+                   environment.canFloatImage(selectedRecord) {
+                    environment.floatImage(selectedRecord)
+                    environment.closeHistory()
+                    return true
+                }
                 environment.copyToClipboard(selectedRecord)
                 return true
             }
@@ -202,12 +210,23 @@ struct HistoryView: View {
         }
         environment.delete(selectedRecord)
     }
+
+    private func focusSearchField() {
+        searchFocused = false
+        DispatchQueue.main.async {
+            searchFocused = true
+        }
+    }
 }
 
 private struct HistoryRow: View {
     let record: ClipRecord
     let thumbnailURL: URL?
     let isSelected: Bool
+    let canFloatImage: Bool
+    let floatImage: () -> Void
+    let copy: () -> Void
+    let select: () -> Void
 
     @State private var showingImagePreview = false
 
@@ -244,11 +263,30 @@ private struct HistoryRow: View {
             }
 
             Spacer(minLength: 12)
+
+            if canFloatImage {
+                Button {
+                    floatImage()
+                } label: {
+                    Image(systemName: "rectangle.on.rectangle")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Open as ScreenFloat")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(minHeight: previewSize + 16)
+        .contentShape(Rectangle())
         .background(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
+        .onTapGesture {
+            select()
+        }
+        .onTapGesture(count: 2) {
+            copy()
+        }
     }
 
     @ViewBuilder

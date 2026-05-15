@@ -308,6 +308,16 @@ public final class ClipStore {
         return thumbnailURL
     }
 
+    public func image(for record: ClipRecord) throws -> NSImage? {
+        if let image = try firstImageRepresentation(for: record.id) {
+            return image
+        }
+        guard let thumbnailPath = record.thumbnailPath else {
+            return nil
+        }
+        return NSImage(contentsOf: urlForRelativePath(thumbnailPath))
+    }
+
     private func migrate() throws {
         try db.exec(
             """

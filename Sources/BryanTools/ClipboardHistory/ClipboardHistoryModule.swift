@@ -28,6 +28,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
     @Published private(set) var plainTextPasteHotKey: AppHotKey
     @Published private(set) var retentionDays: Int
     @Published private(set) var storagePath: String
+    @Published private(set) var focusRequestID = 0
     @Published var lastErrorMessage: String?
 
     @Published private(set) var store: ClipStore
@@ -82,6 +83,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         rememberAppForFocusRestore()
         refreshSearch()
         historyPanelController.show()
+        requestSearchFocus()
     }
 
     func closeHistory() {
@@ -98,6 +100,10 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         searchClearWorkItem?.cancel()
         searchClearWorkItem = nil
         searchClearToken = nil
+    }
+
+    private func requestSearchFocus() {
+        focusRequestID += 1
     }
 
     func menuContent() -> AnyView {
@@ -315,6 +321,33 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         }
     }
 
+    func addImageToHistory(_ image: NSImage) {
+        guard let pngData = pngData(from: image) else {
+            lastErrorMessage = "Unable to encode ScreenFloat image for Clipboard History."
+            return
+        }
+
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("BryanToolsScreenFloat-\(UUID().uuidString)"))
+        pasteboard.clearContents()
+        let item = NSPasteboardItem()
+        item.setData(pngData, forType: NSPasteboard.PasteboardType("public.png"))
+        guard pasteboard.writeObjects([item]) else {
+            lastErrorMessage = "Unable to add ScreenFloat image to Clipboard History."
+            return
+        }
+
+        do {
+            _ = try store.captureCurrentPasteboard(
+                pasteboard,
+                sourceApplication: NSRunningApplication.current
+            )
+            refreshSearch()
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
     func refreshSearch() {
         do {
             searchResults = try store.search(searchQuery)
@@ -348,6 +381,27 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
             }
             thumbnailMisses.insert(record.id)
             return nil
+        }
+    }
+
+    func canFloatImage(_ record: ClipRecord) -> Bool {
+        record.thumbnailPath != nil
+    }
+
+    func floatImage(_ record: ClipRecord) {
+        guard canFloatImage(record) else {
+            return
+        }
+
+        do {
+            guard let image = try store.image(for: record) else {
+                lastErrorMessage = "Unable to load selected image for ScreenFloat."
+                return
+            }
+            ScreenFloatModule.shared.floatImage(image)
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = error.localizedDescription
         }
     }
 
@@ -484,5 +538,13 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         let ids = Set(records.map(\.id))
         thumbnailURLCache = thumbnailURLCache.filter { ids.contains($0.key) }
         thumbnailMisses = thumbnailMisses.intersection(ids)
+    }
+
+    private func pngData(from image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else {
+            return nil
+        }
+        return bitmap.representation(using: .png, properties: [:])
     }
 }

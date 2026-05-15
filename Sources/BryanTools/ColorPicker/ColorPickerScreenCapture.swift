@@ -133,4 +133,32 @@ struct ColorPickerScreenCapture {
         )
         return rect.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
     }
+
+    func imageRect(forGlobalRect globalRect: CGRect) -> CGRect? {
+        let selection = globalRect.standardized.intersection(frame)
+        guard !selection.isNull,
+              selection.width > 0,
+              selection.height > 0 else {
+            return nil
+        }
+
+        let xScale = CGFloat(image.width) / frame.width
+        let yScale = CGFloat(image.height) / frame.height
+        let x = (selection.minX - frame.minX) * xScale
+        let y = (frame.maxY - selection.maxY) * yScale
+        let rect = CGRect(
+            x: floor(x),
+            y: floor(y),
+            width: ceil(selection.width * xScale),
+            height: ceil(selection.height * yScale)
+        )
+        return rect.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    }
+
+    func croppedImage(forGlobalRect globalRect: CGRect) -> CGImage? {
+        guard let imageRect = imageRect(forGlobalRect: globalRect) else {
+            return nil
+        }
+        return image.cropping(to: imageRect)
+    }
 }

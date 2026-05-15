@@ -16,6 +16,8 @@ struct BryanToolsSettingsView: View {
                 environment.macroText.settingsView()
 
                 environment.quickTask.settingsView()
+
+                environment.screenFloat.settingsView()
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)

@@ -23,7 +23,9 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
 
     func show() {
         if panel?.isVisible == true {
+            NSApp.activate(ignoringOtherApps: true)
             panel?.orderFrontRegardless()
+            panel?.makeKeyAndOrderFront(nil)
             return
         }
 
@@ -40,6 +42,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             panel.center()
         }
 
+        NSApp.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
         panel.makeKeyAndOrderFront(nil)
     }

@@ -44,6 +44,7 @@ final class QuickTaskPanelController {
         }
 
         NSApp.activate(ignoringOtherApps: true)
+        panel.orderFrontRegardless()
         panel.makeKeyAndOrderFront(nil)
     }
 

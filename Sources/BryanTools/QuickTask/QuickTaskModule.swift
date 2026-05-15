@@ -28,6 +28,7 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     @Published private(set) var applications: [QuickTaskApplication] = []
     @Published private(set) var matches: [QuickTaskApplication] = []
     @Published private(set) var calculationResult: String?
+    @Published private(set) var focusRequestID = 0
     @Published var lastErrorMessage: String?
 
     var panelSize: NSSize {
@@ -99,6 +100,7 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         applications = QuickTaskApplicationIndex.loadApplications()
         updateResults()
         panelController.show()
+        requestInputFocus()
     }
 
     func closeQuickTask() {
@@ -167,6 +169,10 @@ final class QuickTaskModule: ObservableObject, ToolModule {
             calculationResult = nil
         }
         panelController.updateSize()
+    }
+
+    private func requestInputFocus() {
+        focusRequestID += 1
     }
 
     private func registerHotKeyWithFallback() {

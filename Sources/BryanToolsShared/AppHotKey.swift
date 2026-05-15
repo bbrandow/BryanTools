@@ -23,6 +23,10 @@ public struct AppHotKey: Equatable {
         keyCode: UInt32(kVK_Space),
         modifiers: UInt32(cmdKey)
     )
+    public static let defaultScreenFloatValue = AppHotKey(
+        keyCode: UInt32(kVK_ANSI_2),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
     public static let fallbackQuickTaskValue = AppHotKey(
         keyCode: UInt32(kVK_Space),
         modifiers: UInt32(optionKey)

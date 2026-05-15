@@ -21,6 +21,10 @@ struct BryanToolsMenuContent: View {
 
         Divider()
 
+        ScreenFloatMenuContent(environment: environment.screenFloat)
+
+        Divider()
+
         Button {
             environment.showSettings()
         } label: {

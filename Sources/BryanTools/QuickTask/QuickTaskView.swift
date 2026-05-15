@@ -46,9 +46,10 @@ struct QuickTaskView: View {
             }
         )
         .onAppear {
-            DispatchQueue.main.async {
-                searchFocused = true
-            }
+            focusSearchField()
+        }
+        .onChange(of: environment.focusRequestID) { _, _ in
+            focusSearchField()
         }
         .onChange(of: environment.query) { _, _ in
             selectedApplicationID = nil
@@ -154,6 +155,13 @@ struct QuickTaskView: View {
             environment.launch(selectedApplication)
         } else {
             environment.submitQuery()
+        }
+    }
+
+    private func focusSearchField() {
+        searchFocused = false
+        DispatchQueue.main.async {
+            searchFocused = true
         }
     }
 

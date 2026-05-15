@@ -396,6 +396,13 @@ private func testQuickTaskDefaultHotKey() throws {
     )
 }
 
+private func testScreenFloatDefaultHotKey() throws {
+    try expect(
+        AppHotKey.defaultScreenFloatValue.displayString == "Command-Shift-2",
+        "Expected ScreenFloat default hotkey to be Command-Shift-2"
+    )
+}
+
 private func makeTemporaryDefaults() throws -> (UserDefaults, String) {
     let suiteName = "BryanToolsTests-\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -526,6 +533,7 @@ private let tests: [(String, () throws -> Void)] = [
     ("ColorPicker default hotkey", testColorPickerDefaultHotKey),
     ("MacroText default hotkey", testMacroTextDefaultHotKey),
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
+    ("ScreenFloat default hotkey", testScreenFloatDefaultHotKey),
     ("ClipMan data migration copy", testMigrationCopiesLegacyClipManData),
     ("ClipMan data migration already complete", testMigrationSkipsWhenAlreadyComplete),
     ("ClipMan data migration fresh install", testMigrationFreshInstallWithoutLegacyData)

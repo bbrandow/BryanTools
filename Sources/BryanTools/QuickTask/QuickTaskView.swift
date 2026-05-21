@@ -134,7 +134,7 @@ struct QuickTaskView: View {
     private func handleKey(_ event: NSEvent) -> Bool {
         switch event.keyCode {
         case 53:
-            environment.closeQuickTask()
+            environment.dismissQuickTask()
             return true
         case 36, 76:
             submit()

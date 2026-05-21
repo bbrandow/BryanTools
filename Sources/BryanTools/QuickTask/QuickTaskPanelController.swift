@@ -23,6 +23,10 @@ final class QuickTaskPanelController {
     private var panel: NSPanel?
     private var hasPlacedPanel = false
 
+    var isVisible: Bool {
+        panel?.isVisible == true
+    }
+
     init(environment: QuickTaskModule) {
         self.environment = environment
     }

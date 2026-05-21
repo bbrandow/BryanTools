@@ -18,10 +18,12 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     let id = ToolIdentifier.quickTask
     let displayName = ToolIdentifier.quickTask.displayName
     let systemImage = "command"
+    private static let retainedDismissalInterval: TimeInterval = 120
 
     @Published private(set) var hotKey: AppHotKey
     @Published var query = "" {
         didSet {
+            formatQueryIfNeeded()
             updateResults()
         }
     }
@@ -68,6 +70,9 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     private let hotKeyController = HotKeyController()
     private var preferences: QuickTaskPreferences
     private var isRunning = false
+    private var isFormattingQuery = false
+    private var retainedQueryClearWorkItem: DispatchWorkItem?
+    private var retainedQueryExpiresAt: Date?
     private lazy var panelController = QuickTaskPanelController(environment: self)
 
     private init(preferences: QuickTaskPreferences) {
@@ -97,14 +102,30 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     }
 
     func showQuickTask() {
+        clearExpiredRetainedQueryIfNeeded()
+        cancelRetainedQueryClear()
         applications = QuickTaskApplicationIndex.loadApplications()
         updateResults()
         panelController.show()
         requestInputFocus()
     }
 
+    func toggleQuickTask() {
+        if panelController.isVisible {
+            dismissQuickTask()
+        } else {
+            showQuickTask()
+        }
+    }
+
     func closeQuickTask() {
+        cancelRetainedQueryClear()
         query = ""
+        panelController.close()
+    }
+
+    func dismissQuickTask() {
+        scheduleRetainedQueryClearIfNeeded()
         panelController.close()
     }
 
@@ -121,6 +142,8 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         }
 
         if calculationResult != nil {
+            copyCalculationResultToClipboard()
+            closeQuickTask()
             return
         }
 
@@ -140,7 +163,7 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         do {
             if isRunning {
                 try hotKeyController.register(newHotKey, identifier: HotKeyID.openQuickTask) { [weak self] in
-                    self?.showQuickTask()
+                    self?.toggleQuickTask()
                 }
             }
             hotKey = newHotKey
@@ -150,7 +173,7 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         } catch {
             if isRunning {
                 try? hotKeyController.register(previousHotKey, identifier: HotKeyID.openQuickTask) { [weak self] in
-                    self?.showQuickTask()
+                    self?.toggleQuickTask()
                 }
             }
             lastErrorMessage = error.localizedDescription
@@ -175,10 +198,73 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         focusRequestID += 1
     }
 
+    private func formatQueryIfNeeded() {
+        guard !isFormattingQuery else {
+            return
+        }
+
+        let formattedQuery = QuickTaskCalculator.formattedExpression(query)
+        guard formattedQuery != query else {
+            return
+        }
+
+        isFormattingQuery = true
+        query = formattedQuery
+        isFormattingQuery = false
+    }
+
+    private func copyCalculationResultToClipboard() {
+        guard let calculationResult else {
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(calculationResult, forType: .string)
+    }
+
+    private func scheduleRetainedQueryClearIfNeeded() {
+        cancelRetainedQueryClear()
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            retainedQueryExpiresAt = nil
+            return
+        }
+
+        let expirationDate = Date().addingTimeInterval(Self.retainedDismissalInterval)
+        retainedQueryExpiresAt = expirationDate
+        let workItem = DispatchWorkItem { [weak self] in
+            Task { @MainActor in
+                guard let self,
+                      self.retainedQueryExpiresAt == expirationDate,
+                      !self.panelController.isVisible else {
+                    return
+                }
+                self.query = ""
+                self.retainedQueryExpiresAt = nil
+                self.retainedQueryClearWorkItem = nil
+            }
+        }
+        retainedQueryClearWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.retainedDismissalInterval, execute: workItem)
+    }
+
+    private func cancelRetainedQueryClear() {
+        retainedQueryClearWorkItem?.cancel()
+        retainedQueryClearWorkItem = nil
+        retainedQueryExpiresAt = nil
+    }
+
+    private func clearExpiredRetainedQueryIfNeeded() {
+        guard let retainedQueryExpiresAt,
+              Date() >= retainedQueryExpiresAt else {
+            return
+        }
+        query = ""
+        cancelRetainedQueryClear()
+    }
+
     private func registerHotKeyWithFallback() {
         do {
             try hotKeyController.register(hotKey, identifier: HotKeyID.openQuickTask) { [weak self] in
-                self?.showQuickTask()
+                self?.toggleQuickTask()
             }
             lastErrorMessage = nil
         } catch {
@@ -188,7 +274,7 @@ final class QuickTaskModule: ObservableObject, ToolModule {
             }
             do {
                 try hotKeyController.register(.fallbackQuickTaskValue, identifier: HotKeyID.openQuickTask) { [weak self] in
-                    self?.showQuickTask()
+                    self?.toggleQuickTask()
                 }
                 hotKey = .fallbackQuickTaskValue
                 preferences.hotKey = .fallbackQuickTaskValue

@@ -2,7 +2,7 @@
 
 Bryan Tools is a local macOS menu bar app for personal productivity tools. The
 included tools are Clipboard History, which absorbs the old ClipMan app,
-ColorPicker, MacroText, QuickTask, and ScreenFloat.
+ColorPicker, MacroText, QuickTask, and ShotFloat.
 
 ## Build
 
@@ -29,7 +29,7 @@ History, `Shift+Option+Command+V` to paste the current clipboard as plain text,
 `Shift+Command+~` to pick a screen color, `Shift+Command+/` to configure
 MacroText replacements, and `Command+Space` to open QuickTask. If
 `Command+Space` cannot be registered, QuickTask falls back to `Option+Space`.
-Press `Shift+Command+2` to capture a floating screenshot with ScreenFloat.
+Press `Shift+Command+2` to capture a floating screenshot with ShotFloat.
 
 ## Install Locally
 

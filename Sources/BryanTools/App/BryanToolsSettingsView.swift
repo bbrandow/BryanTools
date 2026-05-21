@@ -17,7 +17,7 @@ struct BryanToolsSettingsView: View {
 
                 environment.quickTask.settingsView()
 
-                environment.screenFloat.settingsView()
+                environment.shotFloat.settingsView()
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)

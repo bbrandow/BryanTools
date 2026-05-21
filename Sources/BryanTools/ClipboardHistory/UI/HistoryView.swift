@@ -273,7 +273,7 @@ private struct HistoryRow: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Open as ScreenFloat")
+                .help("Open as ShotFloat")
             }
         }
         .padding(.horizontal, 14)

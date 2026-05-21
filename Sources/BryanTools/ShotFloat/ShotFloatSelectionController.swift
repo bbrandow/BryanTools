@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 @MainActor
-final class ScreenFloatSelectionController {
+final class ShotFloatSelectionController {
     private let captures: [ColorPickerScreenCapture]
     private let onSelection: (NSImage) -> Void
     private let onCancel: () -> Void
@@ -21,14 +21,14 @@ final class ScreenFloatSelectionController {
     func show() {
         close()
         windows = captures.map { capture in
-            let view = ScreenFloatSelectionView(
+            let view = ShotFloatSelectionView(
                 capture: capture,
                 onSelection: { [weak self] capture, rect in
                     self?.select(capture: capture, rect: rect)
                 },
                 onCancel: onCancel
             )
-            let window = ScreenFloatSelectionWindow(capture: capture, contentView: view)
+            let window = ShotFloatSelectionWindow(capture: capture, contentView: view)
             window.orderFrontRegardless()
             window.makeKey()
             return window
@@ -61,7 +61,7 @@ final class ScreenFloatSelectionController {
     }
 }
 
-private final class ScreenFloatSelectionWindow: NSWindow {
+private final class ShotFloatSelectionWindow: NSWindow {
     init(capture: ColorPickerScreenCapture, contentView: NSView) {
         super.init(
             contentRect: capture.frame,
@@ -89,7 +89,7 @@ private final class ScreenFloatSelectionWindow: NSWindow {
     }
 }
 
-private final class ScreenFloatSelectionView: NSView {
+private final class ShotFloatSelectionView: NSView {
     private let capture: ColorPickerScreenCapture
     private let onSelection: (ColorPickerScreenCapture, CGRect) -> Void
     private let onCancel: () -> Void

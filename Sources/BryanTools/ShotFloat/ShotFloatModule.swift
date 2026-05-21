@@ -4,11 +4,11 @@ import Foundation
 import SwiftUI
 
 @MainActor
-final class ScreenFloatModule: ObservableObject, ToolModule {
-    static let shared = ScreenFloatModule(preferences: .load())
+final class ShotFloatModule: ObservableObject, ToolModule {
+    static let shared = ShotFloatModule(preferences: .load())
 
-    let id = ToolIdentifier.screenFloat
-    let displayName = ToolIdentifier.screenFloat.displayName
+    let id = ToolIdentifier.shotFloat
+    let displayName = ToolIdentifier.shotFloat.displayName
     let systemImage = "rectangle.dashed"
 
     @Published private(set) var hotKey: AppHotKey
@@ -20,12 +20,12 @@ final class ScreenFloatModule: ObservableObject, ToolModule {
     }
 
     private let hotKeyController = HotKeyController()
-    private var preferences: ScreenFloatPreferences
-    private var selectionController: ScreenFloatSelectionController?
+    private var preferences: ShotFloatPreferences
+    private var selectionController: ShotFloatSelectionController?
     private var isRunning = false
     private var appToRestoreFocus: NSRunningApplication?
 
-    private init(preferences: ScreenFloatPreferences) {
+    private init(preferences: ShotFloatPreferences) {
         self.preferences = preferences
         self.hotKey = preferences.hotKey
     }
@@ -39,15 +39,15 @@ final class ScreenFloatModule: ObservableObject, ToolModule {
         isRunning = false
         cancelCapture(restoreFocus: false)
         hotKeyController.unregisterAll()
-        ScreenFloatWindowManager.shared.closeAll()
+        ShotFloatWindowManager.shared.closeAll()
     }
 
     func menuContent() -> AnyView {
-        AnyView(ScreenFloatMenuContent(environment: self))
+        AnyView(ShotFloatMenuContent(environment: self))
     }
 
     func settingsView() -> AnyView {
-        AnyView(ScreenFloatSettingsView(environment: self))
+        AnyView(ShotFloatSettingsView(environment: self))
     }
 
     func beginCapture() {
@@ -64,7 +64,7 @@ final class ScreenFloatModule: ObservableObject, ToolModule {
         do {
             let captures = try ColorPickerScreenCapture.captureScreens()
             rememberAppForFocusRestore()
-            let controller = ScreenFloatSelectionController(
+            let controller = ShotFloatSelectionController(
                 captures: captures,
                 onSelection: { [weak self] image in
                     self?.completeCapture(image)
@@ -84,7 +84,7 @@ final class ScreenFloatModule: ObservableObject, ToolModule {
     }
 
     func floatImage(_ image: NSImage) {
-        ScreenFloatWindowManager.shared.float(image)
+        ShotFloatWindowManager.shared.float(image)
     }
 
     func updateHotKey(_ newHotKey: AppHotKey) {
@@ -115,7 +115,7 @@ final class ScreenFloatModule: ObservableObject, ToolModule {
     }
 
     func resetHotKey() {
-        updateHotKey(.defaultScreenFloatValue)
+        updateHotKey(.defaultShotFloatValue)
     }
 
     private func registerHotKey() {
@@ -129,7 +129,7 @@ final class ScreenFloatModule: ObservableObject, ToolModule {
     }
 
     private func completeCapture(_ image: NSImage) {
-        ScreenFloatWindowManager.shared.float(image)
+        ShotFloatWindowManager.shared.float(image)
         ClipboardHistoryModule.shared.addImageToHistory(image)
         lastErrorMessage = nil
         cancelCapture(restoreFocus: true)

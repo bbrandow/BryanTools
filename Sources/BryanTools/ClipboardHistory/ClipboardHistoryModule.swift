@@ -323,16 +323,16 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
 
     func addImageToHistory(_ image: NSImage) {
         guard let pngData = pngData(from: image) else {
-            lastErrorMessage = "Unable to encode ScreenFloat image for Clipboard History."
+            lastErrorMessage = "Unable to encode ShotFloat image for Clipboard History."
             return
         }
 
-        let pasteboard = NSPasteboard(name: NSPasteboard.Name("BryanToolsScreenFloat-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("BryanToolsShotFloat-\(UUID().uuidString)"))
         pasteboard.clearContents()
         let item = NSPasteboardItem()
         item.setData(pngData, forType: NSPasteboard.PasteboardType("public.png"))
         guard pasteboard.writeObjects([item]) else {
-            lastErrorMessage = "Unable to add ScreenFloat image to Clipboard History."
+            lastErrorMessage = "Unable to add ShotFloat image to Clipboard History."
             return
         }
 
@@ -395,10 +395,10 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
 
         do {
             guard let image = try store.image(for: record) else {
-                lastErrorMessage = "Unable to load selected image for ScreenFloat."
+                lastErrorMessage = "Unable to load selected image for ShotFloat."
                 return
             }
-            ScreenFloatModule.shared.floatImage(image)
+            ShotFloatModule.shared.floatImage(image)
             lastErrorMessage = nil
         } catch {
             lastErrorMessage = error.localizedDescription

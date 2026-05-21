@@ -1,20 +1,20 @@
 import BryanToolsShared
 import Foundation
 
-struct ScreenFloatPreferences: Equatable {
+struct ShotFloatPreferences: Equatable {
     var hotKey: AppHotKey
 
     private enum Key {
-        static let hotKeyCode = "screenFloat.hotKeyCode"
-        static let hotKeyModifiers = "screenFloat.hotKeyModifiers"
+        static let hotKeyCode = "shotFloat.hotKeyCode"
+        static let hotKeyModifiers = "shotFloat.hotKeyModifiers"
     }
 
-    static func load(defaults: UserDefaults = .standard) -> ScreenFloatPreferences {
+    static func load(defaults: UserDefaults = .standard) -> ShotFloatPreferences {
         let keyCode = defaults.object(forKey: Key.hotKeyCode) as? Int
-            ?? Int(AppHotKey.defaultScreenFloatValue.keyCode)
+            ?? Int(AppHotKey.defaultShotFloatValue.keyCode)
         let modifiers = defaults.object(forKey: Key.hotKeyModifiers) as? Int
-            ?? Int(AppHotKey.defaultScreenFloatValue.modifiers)
-        return ScreenFloatPreferences(
+            ?? Int(AppHotKey.defaultShotFloatValue.modifiers)
+        return ShotFloatPreferences(
             hotKey: AppHotKey(keyCode: UInt32(keyCode), modifiers: UInt32(modifiers))
         )
     }

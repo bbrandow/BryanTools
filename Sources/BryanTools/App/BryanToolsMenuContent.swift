@@ -21,7 +21,7 @@ struct BryanToolsMenuContent: View {
 
         Divider()
 
-        ScreenFloatMenuContent(environment: environment.screenFloat)
+        ShotFloatMenuContent(environment: environment.shotFloat)
 
         Divider()
 

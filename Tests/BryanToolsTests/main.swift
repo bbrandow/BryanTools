@@ -396,10 +396,10 @@ private func testQuickTaskDefaultHotKey() throws {
     )
 }
 
-private func testScreenFloatDefaultHotKey() throws {
+private func testShotFloatDefaultHotKey() throws {
     try expect(
-        AppHotKey.defaultScreenFloatValue.displayString == "Command-Shift-2",
-        "Expected ScreenFloat default hotkey to be Command-Shift-2"
+        AppHotKey.defaultShotFloatValue.displayString == "Command-Shift-2",
+        "Expected ShotFloat default hotkey to be Command-Shift-2"
     )
 }
 
@@ -533,7 +533,7 @@ private let tests: [(String, () throws -> Void)] = [
     ("ColorPicker default hotkey", testColorPickerDefaultHotKey),
     ("MacroText default hotkey", testMacroTextDefaultHotKey),
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
-    ("ScreenFloat default hotkey", testScreenFloatDefaultHotKey),
+    ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
     ("ClipMan data migration copy", testMigrationCopiesLegacyClipManData),
     ("ClipMan data migration already complete", testMigrationSkipsWhenAlreadyComplete),
     ("ClipMan data migration fresh install", testMigrationFreshInstallWithoutLegacyData)

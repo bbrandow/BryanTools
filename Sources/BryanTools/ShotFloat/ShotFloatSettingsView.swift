@@ -3,17 +3,17 @@ import BryanToolsShared
 import Carbon
 import SwiftUI
 
-struct ScreenFloatSettingsView: View {
-    @ObservedObject var environment: ScreenFloatModule
+struct ShotFloatSettingsView: View {
+    @ObservedObject var environment: ShotFloatModule
     @State private var recordingShortcut = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("ScreenFloat")
+            Text("ShotFloat")
                 .font(.system(size: 22, weight: .semibold))
 
             settingsSection("Shortcuts") {
-                settingsRow("Capture ScreenFloat") {
+                settingsRow("Capture ShotFloat") {
                     shortcutControls
                 }
             }

@@ -2,15 +2,15 @@ import AppKit
 import Foundation
 
 @MainActor
-final class ScreenFloatWindowManager {
-    static let shared = ScreenFloatWindowManager()
+final class ShotFloatWindowManager {
+    static let shared = ShotFloatWindowManager()
 
-    private var panels: [ScreenFloatPanel] = []
+    private var panels: [ShotFloatPanel] = []
 
     private init() {}
 
     func float(_ image: NSImage) {
-        let panel = ScreenFloatPanel(image: image) { [weak self] panel in
+        let panel = ShotFloatPanel(image: image) { [weak self] panel in
             self?.close(panel)
         }
         panels.append(panel)
@@ -24,19 +24,19 @@ final class ScreenFloatWindowManager {
         panels.removeAll()
     }
 
-    private func close(_ panel: ScreenFloatPanel) {
+    private func close(_ panel: ShotFloatPanel) {
         panel.orderOut(nil)
         panels.removeAll { $0 === panel }
     }
 }
 
-private final class ScreenFloatPanel: NSPanel {
-    private let floatView: ScreenFloatImageView
+private final class ShotFloatPanel: NSPanel {
+    private let floatView: ShotFloatImageView
 
-    init(image: NSImage, onClose: @escaping (ScreenFloatPanel) -> Void) {
-        let initialZoom = ScreenFloatPanel.initialZoom(for: image)
-        self.floatView = ScreenFloatImageView(image: image, zoom: initialZoom)
-        let contentSize = ScreenFloatImageView.contentSize(for: image, zoom: initialZoom)
+    init(image: NSImage, onClose: @escaping (ShotFloatPanel) -> Void) {
+        let initialZoom = ShotFloatPanel.initialZoom(for: image)
+        self.floatView = ShotFloatImageView(image: image, zoom: initialZoom)
+        let contentSize = ShotFloatImageView.contentSize(for: image, zoom: initialZoom)
 
         super.init(
             contentRect: NSRect(origin: .zero, size: contentSize),
@@ -90,7 +90,7 @@ private final class ScreenFloatPanel: NSPanel {
     private func resize(zoom: CGFloat) {
         let oldFrame = frame
         let center = CGPoint(x: oldFrame.midX, y: oldFrame.midY)
-        let size = ScreenFloatImageView.contentSize(for: floatView.image, zoom: zoom)
+        let size = ShotFloatImageView.contentSize(for: floatView.image, zoom: zoom)
         let newFrame = NSRect(
             x: center.x - size.width / 2,
             y: center.y - size.height / 2,
@@ -101,7 +101,7 @@ private final class ScreenFloatPanel: NSPanel {
     }
 
     private static func initialZoom(for image: NSImage) -> CGFloat {
-        let imageSize = ScreenFloatImageView.validImageSize(image)
+        let imageSize = ShotFloatImageView.validImageSize(image)
         guard let screenFrame = NSScreen.main?.visibleFrame else {
             return min(1, min(720 / imageSize.width, 520 / imageSize.height))
         }
@@ -111,7 +111,7 @@ private final class ScreenFloatPanel: NSPanel {
     }
 }
 
-private final class ScreenFloatImageView: NSView {
+private final class ShotFloatImageView: NSView {
     static let topBarHeight = CGFloat(24)
     static let minimumImageDimension = CGFloat(120)
     static let maximumImageDimension = CGFloat(2_400)

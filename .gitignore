@@ -1,3 +1,22 @@
+# Swift Package Manager
 .build/
 .swiftpm/
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcarchive/
+*.dSYM/
+
+# macOS
 .DS_Store
+
+# Local app packaging
+dist/
+*.dmg
+*.app/
+*.pkg
+*.zip

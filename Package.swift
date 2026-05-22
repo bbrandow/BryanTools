@@ -13,7 +13,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "BryanToolsShared"
+            name: "BryanToolsShared",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .target(
             name: "ClipboardHistoryCore",

@@ -13,6 +13,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let shotFloat: ShotFloatModule
     let screenOCR: ScreenOCRModule
     let trayCal: TrayCalModule
+    let diskSpaceMonitor: DiskSpaceMonitorModule
     let tools: [any ToolModule]
 
     private lazy var settingsPanelController = BryanToolsSettingsPanelController(environment: self)
@@ -24,7 +25,8 @@ final class BryanToolsEnvironment: ObservableObject {
         quickTask: QuickTaskModule,
         shotFloat: ShotFloatModule,
         screenOCR: ScreenOCRModule,
-        trayCal: TrayCalModule
+        trayCal: TrayCalModule,
+        diskSpaceMonitor: DiskSpaceMonitorModule
     ) {
         self.clipboardHistory = clipboardHistory
         self.colorPicker = colorPicker
@@ -33,7 +35,8 @@ final class BryanToolsEnvironment: ObservableObject {
         self.shotFloat = shotFloat
         self.screenOCR = screenOCR
         self.trayCal = trayCal
-        self.tools = [clipboardHistory, colorPicker, macroText, quickTask, shotFloat, screenOCR, trayCal]
+        self.diskSpaceMonitor = diskSpaceMonitor
+        self.tools = [clipboardHistory, colorPicker, macroText, quickTask, shotFloat, screenOCR, trayCal, diskSpaceMonitor]
         screenOCR.setTextOutputHandler { text in
             try clipboardHistory.copyTextToClipboardAndHistory(text)
         }
@@ -71,7 +74,8 @@ final class BryanToolsEnvironment: ObservableObject {
             quickTask: QuickTaskModule.shared,
             shotFloat: ShotFloatModule.shared,
             screenOCR: ScreenOCRModule.shared,
-            trayCal: TrayCalModule.shared
+            trayCal: TrayCalModule.shared,
+            diskSpaceMonitor: DiskSpaceMonitorModule.shared
         )
     }
 }

@@ -555,6 +555,87 @@ private func testTrayCalMonthAndYearJumpState() throws {
     )
 }
 
+private func testDiskSpaceDisplayFormatting() throws {
+    let sample = DiskSpaceSample(
+        sampledAt: Date(),
+        availableBytes: 100_999_999_999,
+        totalBytes: 500_000_000_000
+    )
+
+    try expect(sample.freeGB == 100, "Expected decimal GB conversion to round down")
+    try expect(
+        DiskSpaceMonitorDisplay.trayTitle(availableBytes: sample.availableBytes) == "100GB",
+        "Expected disk-space tray title to use whole decimal GB"
+    )
+}
+
+private func testDiskSpaceWarningThreshold() throws {
+    try expect(
+        DiskSpaceMonitorDisplay.isBelowWarningThreshold(
+            availableBytes: 49_999_999_999,
+            thresholdGB: 50
+        ),
+        "Expected disk-space warning below threshold"
+    )
+    try expect(
+        !DiskSpaceMonitorDisplay.isBelowWarningThreshold(
+            availableBytes: 50_000_000_000,
+            thresholdGB: 50
+        ),
+        "Expected disk-space warning not to trigger at threshold"
+    )
+}
+
+private func testDiskSpacePreferencesDefaults() throws {
+    let (defaults, suiteName) = try makeTemporaryDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let preferences = DiskSpaceMonitorPreferences.load(defaults: defaults)
+    try expect(preferences.isEnabled, "Expected Disk Space Monitor to default enabled")
+    try expect(
+        preferences.warningThresholdGB == 50,
+        "Expected Disk Space Monitor warning threshold to default to 50GB"
+    )
+    try expect(
+        DiskSpaceMonitorPreferences.pollInterval == 5 * 60,
+        "Expected Disk Space Monitor poll interval to be five minutes"
+    )
+}
+
+private func testDiskSpaceSampleStoreRetention() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("BryanToolsDiskSpace-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let store = try DiskSpaceSampleStore(rootDirectory: root)
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let oldSample = DiskSpaceSample(
+        sampledAt: now.addingTimeInterval(-31 * 24 * 60 * 60),
+        availableBytes: 80_000_000_000,
+        totalBytes: 500_000_000_000
+    )
+    let recentSample = DiskSpaceSample(
+        sampledAt: now.addingTimeInterval(-24 * 60 * 60),
+        availableBytes: 100_000_000_000,
+        totalBytes: 500_000_000_000
+    )
+    let latestSample = DiskSpaceSample(
+        sampledAt: now,
+        availableBytes: 101_000_000_000,
+        totalBytes: 500_000_000_000
+    )
+
+    try store.insert(oldSample)
+    try store.insert(recentSample)
+    try store.insert(latestSample)
+    try expect(try store.latestSample() == latestSample, "Expected Disk Space Monitor latest sample query")
+
+    try store.purgeOlderThan(now: now)
+    let samples = try store.samples(since: now.addingTimeInterval(-30 * 24 * 60 * 60))
+
+    try expect(samples == [recentSample, latestSample], "Expected Disk Space Monitor to purge samples older than 30 days")
+}
+
 private func testScreenOCRTextFormatterSortsAndTrimsLines() throws {
     let text = ScreenOCRTextFormatter.text(from: [
         ScreenOCRRecognizedLine(text: "  bottom  ", boundingBox: CGRect(x: 0.1, y: 0.1, width: 0.2, height: 0.1)),
@@ -750,6 +831,10 @@ private let tests: [(String, () throws -> Void)] = [
     ("TrayCal May 2026 grid", testTrayCalMay2026MonthGrid),
     ("TrayCal today reset", testTrayCalTodayResetState),
     ("TrayCal month/year jump", testTrayCalMonthAndYearJumpState),
+    ("Disk Space display formatting", testDiskSpaceDisplayFormatting),
+    ("Disk Space warning threshold", testDiskSpaceWarningThreshold),
+    ("Disk Space preference defaults", testDiskSpacePreferencesDefaults),
+    ("Disk Space sample store retention", testDiskSpaceSampleStoreRetention),
     ("Screen OCR text formatter", testScreenOCRTextFormatterSortsAndTrimsLines),
     ("Screen OCR text history capture", testClipboardHistoryTextRecorderCapturesRecognizedText),
     ("Screen OCR empty text ignore", testClipboardHistoryTextRecorderIgnoresEmptyText),

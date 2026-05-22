@@ -462,6 +462,99 @@ private func testScreenOCRDefaultHotKey() throws {
     )
 }
 
+private func trayCalTestCalendar() -> Calendar {
+    TrayCalCalendar.defaultCalendar(timeZone: TimeZone(secondsFromGMT: 0)!)
+}
+
+private func trayCalDate(year: Int, month: Int, day: Int) throws -> Date {
+    let calendar = trayCalTestCalendar()
+    let components = DateComponents(
+        calendar: calendar,
+        timeZone: calendar.timeZone,
+        year: year,
+        month: month,
+        day: day
+    )
+    return try require(components.date, "Expected TrayCal test date")
+}
+
+private func testTrayCalToolIdentifier() throws {
+    try expect(ToolIdentifier.trayCal.displayName == "TrayCal", "Expected TrayCal tool display name")
+}
+
+private func testTrayCalStatusTitleFormatting() throws {
+    let date = try trayCalDate(year: 2026, month: 5, day: 22)
+    try expect(
+        TrayCalCalendar.statusTitle(for: date, calendar: trayCalTestCalendar()) == "Fri, May 22",
+        "Expected TrayCal status title to use fixed format"
+    )
+
+    let september = try trayCalDate(year: 2026, month: 9, day: 3)
+    try expect(
+        TrayCalCalendar.statusTitle(for: september, calendar: trayCalTestCalendar()) == "Thu, Sep 3",
+        "Expected TrayCal status title to truncate longer month names"
+    )
+}
+
+private func testTrayCalPopupMonthNameFormatting() throws {
+    let january = try trayCalDate(year: 2026, month: 1, day: 22)
+    try expect(
+        TrayCalCalendar.monthName(for: january, calendar: trayCalTestCalendar()) == "Jan",
+        "Expected TrayCal popup month header to use a three-character month"
+    )
+}
+
+private func testTrayCalMay2026MonthGrid() throws {
+    let calendar = trayCalTestCalendar()
+    let may = try trayCalDate(year: 2026, month: 5, day: 22)
+    let grid = TrayCalCalendar.monthGrid(displayedMonth: may, today: may, calendar: calendar)
+
+    try expect(grid.count == 42, "Expected TrayCal month grid to contain six weeks")
+    try expect(grid.first?.day == 26 && grid.first?.isInDisplayedMonth == false, "Expected May 2026 grid to begin with Apr 26")
+    try expect(grid[5].day == 1 && grid[5].isInDisplayedMonth, "Expected May 1 to land on Friday")
+    try expect(grid[6].day == 2 && grid[6].isInDisplayedMonth, "Expected May 2 to land on Saturday")
+    try expect(grid.last?.day == 6 && grid.last?.isInDisplayedMonth == false, "Expected May 2026 grid to end with Jun 6")
+    try expect(grid.filter(\.isToday).map(\.day) == [22], "Expected May 22 to be highlighted as today")
+}
+
+private func testTrayCalTodayResetState() throws {
+    let calendar = trayCalTestCalendar()
+    let today = try trayCalDate(year: 2026, month: 5, day: 22)
+    var state = TrayCalCalendarState(
+        displayedMonth: try trayCalDate(year: 2026, month: 8, day: 4),
+        calendar: calendar
+    )
+
+    state.returnToToday(today, calendar: calendar)
+
+    try expect(
+        calendar.isDate(state.displayedMonth, equalTo: today, toGranularity: .month),
+        "Expected TrayCal today reset to return to the current month"
+    )
+}
+
+private func testTrayCalMonthAndYearJumpState() throws {
+    let calendar = trayCalTestCalendar()
+    var state = TrayCalCalendarState(
+        displayedMonth: try trayCalDate(year: 2026, month: 5, day: 22),
+        calendar: calendar
+    )
+
+    state.showMonth(11, calendar: calendar)
+    try expect(
+        TrayCalCalendar.month(for: state.displayedMonth, calendar: calendar) == 11
+            && TrayCalCalendar.year(for: state.displayedMonth, calendar: calendar) == 2026,
+        "Expected TrayCal month picker state to preserve year while changing month"
+    )
+
+    state.showYear(2031, calendar: calendar)
+    try expect(
+        TrayCalCalendar.month(for: state.displayedMonth, calendar: calendar) == 11
+            && TrayCalCalendar.year(for: state.displayedMonth, calendar: calendar) == 2031,
+        "Expected TrayCal year picker state to preserve month while changing year"
+    )
+}
+
 private func testScreenOCRTextFormatterSortsAndTrimsLines() throws {
     let text = ScreenOCRTextFormatter.text(from: [
         ScreenOCRRecognizedLine(text: "  bottom  ", boundingBox: CGRect(x: 0.1, y: 0.1, width: 0.2, height: 0.1)),
@@ -651,6 +744,12 @@ private let tests: [(String, () throws -> Void)] = [
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
     ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),
+    ("TrayCal tool identifier", testTrayCalToolIdentifier),
+    ("TrayCal status title", testTrayCalStatusTitleFormatting),
+    ("TrayCal popup month name", testTrayCalPopupMonthNameFormatting),
+    ("TrayCal May 2026 grid", testTrayCalMay2026MonthGrid),
+    ("TrayCal today reset", testTrayCalTodayResetState),
+    ("TrayCal month/year jump", testTrayCalMonthAndYearJumpState),
     ("Screen OCR text formatter", testScreenOCRTextFormatterSortsAndTrimsLines),
     ("Screen OCR text history capture", testClipboardHistoryTextRecorderCapturesRecognizedText),
     ("Screen OCR empty text ignore", testClipboardHistoryTextRecorderIgnoresEmptyText),

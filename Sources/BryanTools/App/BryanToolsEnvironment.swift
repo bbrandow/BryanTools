@@ -1,3 +1,4 @@
+import AppKit
 import BryanToolsShared
 import Foundation
 
@@ -11,6 +12,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let quickTask: QuickTaskModule
     let shotFloat: ShotFloatModule
     let screenOCR: ScreenOCRModule
+    let trayCal: TrayCalModule
     let tools: [any ToolModule]
 
     private lazy var settingsPanelController = BryanToolsSettingsPanelController(environment: self)
@@ -21,7 +23,8 @@ final class BryanToolsEnvironment: ObservableObject {
         macroText: MacroTextModule,
         quickTask: QuickTaskModule,
         shotFloat: ShotFloatModule,
-        screenOCR: ScreenOCRModule
+        screenOCR: ScreenOCRModule,
+        trayCal: TrayCalModule
     ) {
         self.clipboardHistory = clipboardHistory
         self.colorPicker = colorPicker
@@ -29,10 +32,19 @@ final class BryanToolsEnvironment: ObservableObject {
         self.quickTask = quickTask
         self.shotFloat = shotFloat
         self.screenOCR = screenOCR
-        self.tools = [clipboardHistory, colorPicker, macroText, quickTask, shotFloat, screenOCR]
+        self.trayCal = trayCal
+        self.tools = [clipboardHistory, colorPicker, macroText, quickTask, shotFloat, screenOCR, trayCal]
         screenOCR.setTextOutputHandler { text in
             try clipboardHistory.copyTextToClipboardAndHistory(text)
         }
+        trayCal.setActionHandlers(
+            showSettings: { [weak self] in
+                self?.showSettings()
+            },
+            quit: {
+                NSApp.terminate(nil)
+            }
+        )
     }
 
     func start() {
@@ -58,7 +70,8 @@ final class BryanToolsEnvironment: ObservableObject {
             macroText: MacroTextModule.shared,
             quickTask: QuickTaskModule.shared,
             shotFloat: ShotFloatModule.shared,
-            screenOCR: ScreenOCRModule.shared
+            screenOCR: ScreenOCRModule.shared,
+            trayCal: TrayCalModule.shared
         )
     }
 }

@@ -22,11 +22,6 @@ struct BryanToolsApp: App {
     @StateObject private var environment = BryanToolsEnvironment.shared
 
     var body: some Scene {
-        MenuBarExtra("Bryan Tools", systemImage: "wrench.and.screwdriver") {
-            BryanToolsMenuContent(environment: environment)
-        }
-        .menuBarExtraStyle(.menu)
-
         Settings {
             BryanToolsSettingsView(environment: environment)
         }

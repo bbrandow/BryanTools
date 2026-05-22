@@ -8,6 +8,7 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
     case quickTask
     case shotFloat
     case screenOCR
+    case trayCal
 
     public var id: String {
         rawValue
@@ -29,6 +30,8 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
             return "ShotFloat"
         case .screenOCR:
             return "Screen OCR"
+        case .trayCal:
+            return "TrayCal"
         }
     }
 

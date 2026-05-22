@@ -61,6 +61,16 @@ This local Command Line Tools install does not provide `XCTest` or Swift
 Scripts/test.sh
 ```
 
+## Update an existing install
+
+```sh
+Scripts/update.sh
+```
+
+The update script refuses to run with local checkout changes, pulls with
+`--ff-only`, runs self-tests, quits any running Bryan Tools instance, installs a
+release build, and relaunches the app. Set `LAUNCH_APP=0` to skip the relaunch.
+
 ## Data
 
 Clipboard History stores data locally in Application Support:

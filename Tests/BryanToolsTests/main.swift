@@ -267,7 +267,20 @@ private func testOnePasswordMarkerIsSkipped() throws {
     try expect(captured == nil, "Expected 1Password pasteboard marker to be skipped")
 }
 
-private func testLikelyChromeExtensionPasswordIsSkipped() throws {
+private func testOnePasswordAppSourceIsSkipped() throws {
+    let pasteboard = namedPasteboard()
+    try writeString("A8f!qTz$9Lm#vP2x", to: pasteboard)
+
+    let captured = PasteboardArchiver.capture(
+        from: pasteboard,
+        sourceApplicationInfo: PasteboardSourceApplication(bundleIdentifier: "com.1password.1password", localizedName: "1Password"),
+        maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+        maxEventBytes: ClipStore.defaultMaxEventBytes
+    )
+    try expect(captured == nil, "Expected 1Password app source to be skipped")
+}
+
+private func testChromeSecretShapedTextIsSkippedWithoutMarker() throws {
     let pasteboard = namedPasteboard()
     try writeString("A8f!qTz$9Lm#vP2x", to: pasteboard)
 
@@ -277,10 +290,36 @@ private func testLikelyChromeExtensionPasswordIsSkipped() throws {
         maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
         maxEventBytes: ClipStore.defaultMaxEventBytes
     )
-    try expect(captured == nil, "Expected likely password copied from Chrome to be skipped")
+    try expect(captured == nil, "Expected Chrome secret-shaped text without a 1Password marker to be skipped")
 }
 
-private func testLikelyChromeExtensionOTPIsSkipped() throws {
+private func testChromeShortPasswordIsSkippedWithoutMarker() throws {
+    let pasteboard = namedPasteboard()
+    try writeString("Password1!", to: pasteboard)
+
+    let captured = PasteboardArchiver.capture(
+        from: pasteboard,
+        sourceApplicationInfo: PasteboardSourceApplication(bundleIdentifier: "com.google.Chrome", localizedName: "Google Chrome"),
+        maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+        maxEventBytes: ClipStore.defaultMaxEventBytes
+    )
+    try expect(captured == nil, "Expected short Chrome password-shaped text without a marker to be skipped")
+}
+
+private func testChromeMemorablePasswordIsSkippedWithoutMarker() throws {
+    let pasteboard = namedPasteboard()
+    try writeString("orbit-velvet-afternoon-harbor", to: pasteboard)
+
+    let captured = PasteboardArchiver.capture(
+        from: pasteboard,
+        sourceApplicationInfo: PasteboardSourceApplication(bundleIdentifier: "com.google.Chrome", localizedName: "Google Chrome"),
+        maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+        maxEventBytes: ClipStore.defaultMaxEventBytes
+    )
+    try expect(captured == nil, "Expected Chrome memorable-password-shaped text without a marker to be skipped")
+}
+
+private func testChromeOTPIsCapturedWithoutMarker() throws {
     let pasteboard = namedPasteboard()
     try writeString("123456", to: pasteboard)
 
@@ -290,7 +329,20 @@ private func testLikelyChromeExtensionOTPIsSkipped() throws {
         maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
         maxEventBytes: ClipStore.defaultMaxEventBytes
     )
-    try expect(captured == nil, "Expected likely one-time password copied from Chrome to be skipped")
+    try expect(captured != nil, "Expected Chrome OTP-shaped text without a 1Password marker to be captured")
+}
+
+private func testChromeUUIDIsCapturedWithoutMarker() throws {
+    let pasteboard = namedPasteboard()
+    try writeString("550e8400-e29b-41d4-a716-446655440000", to: pasteboard)
+
+    let captured = PasteboardArchiver.capture(
+        from: pasteboard,
+        sourceApplicationInfo: PasteboardSourceApplication(bundleIdentifier: "com.google.Chrome", localizedName: "Google Chrome"),
+        maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+        maxEventBytes: ClipStore.defaultMaxEventBytes
+    )
+    try expect(captured != nil, "Expected UUID copied from Chrome without a 1Password marker to be captured")
 }
 
 private func testNormalChromeTextIsCaptured() throws {
@@ -521,8 +573,12 @@ private let tests: [(String, () throws -> Void)] = [
     ("rich representation serialization/search", testRichRepresentationsAreSerializedAndSearchable),
     ("named pasteboard restore round trip", testRestoreRoundTripUsesNamedPasteboard),
     ("1Password pasteboard marker skip", testOnePasswordMarkerIsSkipped),
-    ("Chrome extension password skip", testLikelyChromeExtensionPasswordIsSkipped),
-    ("Chrome extension OTP skip", testLikelyChromeExtensionOTPIsSkipped),
+    ("1Password app source skip", testOnePasswordAppSourceIsSkipped),
+    ("Chrome secret-shaped text skip", testChromeSecretShapedTextIsSkippedWithoutMarker),
+    ("Chrome short password skip", testChromeShortPasswordIsSkippedWithoutMarker),
+    ("Chrome memorable password skip", testChromeMemorablePasswordIsSkippedWithoutMarker),
+    ("Chrome OTP-shaped text capture", testChromeOTPIsCapturedWithoutMarker),
+    ("Chrome UUID capture", testChromeUUIDIsCapturedWithoutMarker),
     ("normal Chrome text capture", testNormalChromeTextIsCaptured),
     ("non-browser secret-shaped text capture", testLikelyPasswordFromNonBrowserIsCapturedWithoutMarker),
     ("plain text extractor string", testPlainTextExtractorReadsString),

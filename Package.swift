@@ -29,6 +29,7 @@ let package = Package(
                 "ClipboardHistoryCore"
             ],
             linkerSettings: [
+                .linkedFramework("Vision"),
                 .linkedLibrary("sqlite3")
             ]
         ),

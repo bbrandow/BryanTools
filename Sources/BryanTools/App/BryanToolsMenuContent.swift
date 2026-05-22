@@ -25,6 +25,10 @@ struct BryanToolsMenuContent: View {
 
         Divider()
 
+        ScreenOCRMenuContent(environment: environment.screenOCR)
+
+        Divider()
+
         Button {
             environment.showSettings()
         } label: {

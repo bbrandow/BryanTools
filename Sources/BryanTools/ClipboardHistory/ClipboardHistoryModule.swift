@@ -348,6 +348,26 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         }
     }
 
+    func copyTextToClipboardAndHistory(_ text: String) throws {
+        let recordText = {
+            try ClipboardHistoryTextRecorder.recordText(
+                text,
+                to: .general,
+                store: self.store,
+                sourceApplication: NSRunningApplication.current
+            )
+        }
+
+        if let monitor {
+            _ = try monitor.performIgnoringPasteboardChanges(recordText)
+        } else {
+            _ = try recordText()
+        }
+
+        refreshSearch()
+        lastErrorMessage = nil
+    }
+
     func refreshSearch() {
         do {
             searchResults = try store.search(searchQuery)

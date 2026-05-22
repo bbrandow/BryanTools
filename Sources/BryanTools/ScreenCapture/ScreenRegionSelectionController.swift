@@ -1,16 +1,22 @@
 import AppKit
 import Foundation
 
+struct ScreenRegionSelection {
+    let image: NSImage
+    let cgImage: CGImage
+    let globalRect: CGRect
+}
+
 @MainActor
-final class ShotFloatSelectionController {
+final class ScreenRegionSelectionController {
     private let captures: [ColorPickerScreenCapture]
-    private let onSelection: (NSImage) -> Void
+    private let onSelection: (ScreenRegionSelection) -> Void
     private let onCancel: () -> Void
     private var windows: [NSWindow] = []
 
     init(
         captures: [ColorPickerScreenCapture],
-        onSelection: @escaping (NSImage) -> Void,
+        onSelection: @escaping (ScreenRegionSelection) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.captures = captures
@@ -21,14 +27,14 @@ final class ShotFloatSelectionController {
     func show() {
         close()
         windows = captures.map { capture in
-            let view = ShotFloatSelectionView(
+            let view = ScreenRegionSelectionView(
                 capture: capture,
                 onSelection: { [weak self] capture, rect in
                     self?.select(capture: capture, rect: rect)
                 },
                 onCancel: onCancel
             )
-            let window = ShotFloatSelectionWindow(capture: capture, contentView: view)
+            let window = ScreenRegionSelectionWindow(capture: capture, contentView: view)
             window.orderFrontRegardless()
             window.makeKey()
             return window
@@ -57,11 +63,17 @@ final class ShotFloatSelectionController {
             cgImage: croppedImage,
             size: NSSize(width: selectedRect.width, height: selectedRect.height)
         )
-        onSelection(image)
+        onSelection(
+            ScreenRegionSelection(
+                image: image,
+                cgImage: croppedImage,
+                globalRect: selectedRect
+            )
+        )
     }
 }
 
-private final class ShotFloatSelectionWindow: NSWindow {
+private final class ScreenRegionSelectionWindow: NSWindow {
     init(capture: ColorPickerScreenCapture, contentView: NSView) {
         super.init(
             contentRect: capture.frame,
@@ -89,7 +101,7 @@ private final class ShotFloatSelectionWindow: NSWindow {
     }
 }
 
-private final class ShotFloatSelectionView: NSView {
+private final class ScreenRegionSelectionView: NSView {
     private let capture: ColorPickerScreenCapture
     private let onSelection: (ColorPickerScreenCapture, CGRect) -> Void
     private let onCancel: () -> Void

@@ -4,30 +4,39 @@ import Foundation
 import SwiftUI
 
 @MainActor
-final class ShotFloatModule: ObservableObject, ToolModule {
-    static let shared = ShotFloatModule(preferences: .load())
+final class ScreenOCRModule: ObservableObject, ToolModule {
+    static let shared = ScreenOCRModule(preferences: .load())
 
-    let id = ToolIdentifier.shotFloat
-    let displayName = ToolIdentifier.shotFloat.displayName
-    let systemImage = "rectangle.dashed"
+    typealias TextOutputHandler = (String) throws -> Void
+
+    let id = ToolIdentifier.screenOCR
+    let displayName = ToolIdentifier.screenOCR.displayName
+    let systemImage = "text.viewfinder"
 
     @Published private(set) var hotKey: AppHotKey
     @Published private(set) var isCapturing = false
+    @Published private(set) var isRecognizing = false
     @Published var lastErrorMessage: String?
+    @Published var lastStatusMessage: String?
 
     private enum HotKeyID {
-        static let captureFloatingScreenshot: HotKeyController.Identifier = 400
+        static let captureText: HotKeyController.Identifier = 500
     }
 
     private let hotKeyController = HotKeyController()
-    private var preferences: ShotFloatPreferences
+    private var preferences: ScreenOCRPreferences
     private var selectionController: ScreenRegionSelectionController?
     private var isRunning = false
     private var appToRestoreFocus: NSRunningApplication?
+    private var textOutputHandler: TextOutputHandler?
 
-    private init(preferences: ShotFloatPreferences) {
+    private init(preferences: ScreenOCRPreferences) {
         self.preferences = preferences
         self.hotKey = preferences.hotKey
+    }
+
+    func setTextOutputHandler(_ handler: @escaping TextOutputHandler) {
+        textOutputHandler = handler
     }
 
     func start() {
@@ -39,15 +48,14 @@ final class ShotFloatModule: ObservableObject, ToolModule {
         isRunning = false
         cancelCapture(restoreFocus: false)
         hotKeyController.unregisterAll()
-        ShotFloatWindowManager.shared.closeAll()
     }
 
     func menuContent() -> AnyView {
-        AnyView(ShotFloatMenuContent(environment: self))
+        AnyView(ScreenOCRMenuContent(environment: self))
     }
 
     func settingsView() -> AnyView {
-        AnyView(ShotFloatSettingsView(environment: self))
+        AnyView(ScreenOCRSettingsView(environment: self))
     }
 
     func beginCapture() {
@@ -55,9 +63,12 @@ final class ShotFloatModule: ObservableObject, ToolModule {
             cancelCapture(restoreFocus: true)
             return
         }
+        guard !isRecognizing else {
+            return
+        }
 
         guard ColorPickerScreenCapture.ensurePermission(promptIfNeeded: true) else {
-            lastErrorMessage = "Enable Screen Recording permission for Bryan Tools to capture floating screenshots."
+            lastErrorMessage = "Enable Screen Recording permission for Bryan Tools to OCR selected screen text."
             return
         }
 
@@ -76,15 +87,12 @@ final class ShotFloatModule: ObservableObject, ToolModule {
             selectionController = controller
             isCapturing = true
             lastErrorMessage = nil
+            lastStatusMessage = nil
             controller.show()
         } catch {
             lastErrorMessage = error.localizedDescription
             cancelCapture(restoreFocus: true)
         }
-    }
-
-    func floatImage(_ image: NSImage) {
-        ShotFloatWindowManager.shared.float(image)
     }
 
     func updateHotKey(_ newHotKey: AppHotKey) {
@@ -96,7 +104,7 @@ final class ShotFloatModule: ObservableObject, ToolModule {
         let previousHotKey = hotKey
         do {
             if isRunning {
-                try hotKeyController.register(newHotKey, identifier: HotKeyID.captureFloatingScreenshot) { [weak self] in
+                try hotKeyController.register(newHotKey, identifier: HotKeyID.captureText) { [weak self] in
                     self?.beginCapture()
                 }
             }
@@ -106,7 +114,7 @@ final class ShotFloatModule: ObservableObject, ToolModule {
             lastErrorMessage = nil
         } catch {
             if isRunning {
-                try? hotKeyController.register(previousHotKey, identifier: HotKeyID.captureFloatingScreenshot) { [weak self] in
+                try? hotKeyController.register(previousHotKey, identifier: HotKeyID.captureText) { [weak self] in
                     self?.beginCapture()
                 }
             }
@@ -115,12 +123,12 @@ final class ShotFloatModule: ObservableObject, ToolModule {
     }
 
     func resetHotKey() {
-        updateHotKey(.defaultShotFloatValue)
+        updateHotKey(.defaultScreenOCRValue)
     }
 
     private func registerHotKey() {
         do {
-            try hotKeyController.register(hotKey, identifier: HotKeyID.captureFloatingScreenshot) { [weak self] in
+            try hotKeyController.register(hotKey, identifier: HotKeyID.captureText) { [weak self] in
                 self?.beginCapture()
             }
         } catch {
@@ -129,10 +137,39 @@ final class ShotFloatModule: ObservableObject, ToolModule {
     }
 
     private func completeCapture(_ selection: ScreenRegionSelection) {
-        ShotFloatWindowManager.shared.float(selection.image)
-        ClipboardHistoryModule.shared.addImageToHistory(selection.image)
-        lastErrorMessage = nil
         cancelCapture(restoreFocus: true)
+        isRecognizing = true
+        lastStatusMessage = "Recognizing text..."
+        lastErrorMessage = nil
+
+        do {
+            let text = try ScreenOCRRecognizer.recognizeText(in: selection.cgImage)
+            try copyRecognizedText(text)
+            lastStatusMessage = "Copied recognized text to clipboard."
+            lastErrorMessage = nil
+        } catch {
+            lastStatusMessage = nil
+            lastErrorMessage = error.localizedDescription
+        }
+
+        isRecognizing = false
+    }
+
+    private func copyRecognizedText(_ text: String) throws {
+        if let textOutputHandler {
+            try textOutputHandler(text)
+            return
+        }
+
+        NSPasteboard.general.clearContents()
+        guard NSPasteboard.general.setString(text, forType: .string) else {
+            throw NSError(
+                domain: "ScreenOCR",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to write OCR text to the pasteboard."]
+            )
+        }
+        PasteboardChangeSuppressor.suppress(changeCount: NSPasteboard.general.changeCount)
     }
 
     private func cancelCapture(restoreFocus: Bool) {

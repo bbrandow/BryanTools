@@ -455,6 +455,66 @@ private func testShotFloatDefaultHotKey() throws {
     )
 }
 
+private func testScreenOCRDefaultHotKey() throws {
+    try expect(
+        AppHotKey.defaultScreenOCRValue.displayString == "Command-Shift-Y",
+        "Expected Screen OCR default hotkey to be Command-Shift-Y"
+    )
+}
+
+private func testScreenOCRTextFormatterSortsAndTrimsLines() throws {
+    let text = ScreenOCRTextFormatter.text(from: [
+        ScreenOCRRecognizedLine(text: "  bottom  ", boundingBox: CGRect(x: 0.1, y: 0.1, width: 0.2, height: 0.1)),
+        ScreenOCRRecognizedLine(text: "top right", boundingBox: CGRect(x: 0.7, y: 0.8, width: 0.2, height: 0.1)),
+        ScreenOCRRecognizedLine(text: "top left", boundingBox: CGRect(x: 0.1, y: 0.8, width: 0.2, height: 0.1)),
+        ScreenOCRRecognizedLine(text: "   ", boundingBox: CGRect(x: 0.1, y: 0.9, width: 0.2, height: 0.1))
+    ])
+
+    try expect(
+        text == "top left\ntop right\nbottom",
+        "Expected OCR text formatter to trim empty lines and sort top-to-bottom, left-to-right"
+    )
+}
+
+private func testClipboardHistoryTextRecorderCapturesRecognizedText() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    let pasteboard = namedPasteboard()
+    let record = try require(
+        try ClipboardHistoryTextRecorder.recordText(
+            "recognized text",
+            to: pasteboard,
+            store: fixture.store,
+            sourceApplication: nil
+        ),
+        "Expected recognized text to be captured"
+    )
+
+    try expect(pasteboard.string(forType: .string) == "recognized text", "Expected recognized text on pasteboard")
+    try expect(record.summary == "recognized text", "Expected recognized text record summary")
+    try expect(try fixture.store.search("recognized").map(\.id) == [record.id], "Expected recognized text in history search")
+}
+
+private func testClipboardHistoryTextRecorderIgnoresEmptyText() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    let pasteboard = namedPasteboard()
+    try writeString("existing clipboard text", to: pasteboard)
+
+    let record = try ClipboardHistoryTextRecorder.recordText(
+        "",
+        to: pasteboard,
+        store: fixture.store,
+        sourceApplication: nil
+    )
+
+    try expect(record == nil, "Expected empty OCR text not to create history")
+    try expect(pasteboard.string(forType: .string) == "existing clipboard text", "Expected empty OCR text to leave pasteboard unchanged")
+    try expect(try fixture.store.search().isEmpty, "Expected empty OCR text to leave history unchanged")
+}
+
 private func makeTemporaryDefaults() throws -> (UserDefaults, String) {
     let suiteName = "BryanToolsTests-\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -590,6 +650,10 @@ private let tests: [(String, () throws -> Void)] = [
     ("MacroText default hotkey", testMacroTextDefaultHotKey),
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
+    ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),
+    ("Screen OCR text formatter", testScreenOCRTextFormatterSortsAndTrimsLines),
+    ("Screen OCR text history capture", testClipboardHistoryTextRecorderCapturesRecognizedText),
+    ("Screen OCR empty text ignore", testClipboardHistoryTextRecorderIgnoresEmptyText),
     ("ClipMan data migration copy", testMigrationCopiesLegacyClipManData),
     ("ClipMan data migration already complete", testMigrationSkipsWhenAlreadyComplete),
     ("ClipMan data migration fresh install", testMigrationFreshInstallWithoutLegacyData)

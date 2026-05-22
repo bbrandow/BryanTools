@@ -18,6 +18,8 @@ struct BryanToolsSettingsView: View {
                 environment.quickTask.settingsView()
 
                 environment.shotFloat.settingsView()
+
+                environment.screenOCR.settingsView()
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)

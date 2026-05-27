@@ -437,6 +437,62 @@ private func testMacroTextDefaultHotKey() throws {
     )
 }
 
+private func macroTextTemplateTestClock() throws -> (now: Date, calendar: Calendar, timeZone: TimeZone) {
+    let timeZone = TimeZone(secondsFromGMT: 0)!
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = timeZone
+    let now = try require(
+        calendar.date(from: DateComponents(year: 2026, month: 5, day: 27, hour: 15)),
+        "Expected MacroText test date"
+    )
+    return (now, calendar, timeZone)
+}
+
+private func testMacroTextDateTemplateHourOffset() throws {
+    let clock = try macroTextTemplateTestClock()
+    let rendered = MacroTextTemplateRenderer.render(
+        "{yyyy-MM-dd'T'hh:-2h}",
+        now: clock.now,
+        calendar: clock.calendar,
+        timeZone: clock.timeZone
+    )
+
+    try expect(
+        rendered == "2026-05-27T13",
+        "Expected MacroText hour offset date template to render from expansion time"
+    )
+}
+
+private func testMacroTextDateTemplateDayOffset() throws {
+    let clock = try macroTextTemplateTestClock()
+    let rendered = MacroTextTemplateRenderer.render(
+        "Yesterday: {yyyy-MM-dd:-1d}",
+        now: clock.now,
+        calendar: clock.calendar,
+        timeZone: clock.timeZone
+    )
+
+    try expect(
+        rendered == "Yesterday: 2026-05-26",
+        "Expected MacroText day offset date template to render from expansion time"
+    )
+}
+
+private func testMacroTextTemplateLeavesNonDateBracesUntouched() throws {
+    let clock = try macroTextTemplateTestClock()
+    let rendered = MacroTextTemplateRenderer.render(
+        "Keep {name} and {hello}",
+        now: clock.now,
+        calendar: clock.calendar,
+        timeZone: clock.timeZone
+    )
+
+    try expect(
+        rendered == "Keep {name} and {hello}",
+        "Expected MacroText date template renderer to leave non-date brace content untouched"
+    )
+}
+
 private func testQuickTaskDefaultHotKey() throws {
     try expect(
         AppHotKey.defaultQuickTaskValue.displayString == "Command-Space",
@@ -822,6 +878,9 @@ private let tests: [(String, () throws -> Void)] = [
     ("image thumbnail high-resolution preview", testImageThumbnailUsesHighResolutionPreview),
     ("ColorPicker default hotkey", testColorPickerDefaultHotKey),
     ("MacroText default hotkey", testMacroTextDefaultHotKey),
+    ("MacroText date template hour offset", testMacroTextDateTemplateHourOffset),
+    ("MacroText date template day offset", testMacroTextDateTemplateDayOffset),
+    ("MacroText non-date braces", testMacroTextTemplateLeavesNonDateBracesUntouched),
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
     ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),

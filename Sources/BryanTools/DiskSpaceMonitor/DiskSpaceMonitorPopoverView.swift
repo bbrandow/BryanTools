@@ -4,6 +4,7 @@ import SwiftUI
 struct DiskSpaceMonitorPopoverView: View {
     @ObservedObject var environment: DiskSpaceMonitorModule
     @State private var hoveredSample: DiskSpaceSample?
+    @State private var graphZoom: DiskSpaceTrendGraphZoom?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -18,6 +19,18 @@ struct DiskSpaceMonitorPopoverView: View {
 
                 Spacer()
 
+                if graphZoom != nil {
+                    Button {
+                        graphZoom = nil
+                        hoveredSample = nil
+                    } label: {
+                        Label("Reset Zoom", systemImage: "arrow.counterclockwise")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Reset graph zoom")
+                }
+
                 Text(environment.trayTitle)
                     .font(.system(size: 22, weight: .semibold, design: .monospaced))
                     .foregroundStyle(environment.isBelowWarningThreshold ? Color.red : Color.primary)
@@ -31,7 +44,7 @@ struct DiskSpaceMonitorPopoverView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             } else {
-                DiskSpaceTrendGraph(samples: environment.samples, hoveredSample: $hoveredSample)
+                DiskSpaceTrendGraph(samples: environment.samples, zoom: $graphZoom, hoveredSample: $hoveredSample)
                     .frame(height: 112)
 
                 HStack {
@@ -74,7 +87,10 @@ struct DiskSpaceMonitorPopoverView: View {
 
 private struct DiskSpaceTrendGraph: View {
     let samples: [DiskSpaceSample]
+    @Binding var zoom: DiskSpaceTrendGraphZoom?
     @Binding var hoveredSample: DiskSpaceSample?
+    @State private var dragStart: CGPoint?
+    @State private var dragCurrent: CGPoint?
 
     var body: some View {
         GeometryReader { proxy in
@@ -82,6 +98,17 @@ private struct DiskSpaceTrendGraph: View {
             ZStack(alignment: .topLeading) {
                 graphPath(size: size)
                     .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+
+                if let rect = activeSelectionRect(size: size) {
+                    Rectangle()
+                        .fill(Color.accentColor.opacity(0.14))
+                        .overlay {
+                            Rectangle()
+                                .stroke(Color.accentColor.opacity(0.75), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        }
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                }
 
                 if let hoveredSample {
                     let point = point(for: hoveredSample, size: size)
@@ -102,20 +129,44 @@ private struct DiskSpaceTrendGraph: View {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.secondary.opacity(0.08))
             }
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
             .onContinuousHover { phase in
                 switch phase {
                 case .active(let location):
+                    guard dragStart == nil else {
+                        return
+                    }
                     hoveredSample = nearestSample(to: location, size: size)
                 case .ended:
                     hoveredSample = nil
                 }
             }
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { value in
+                        if dragStart == nil {
+                            dragStart = clampedPoint(value.startLocation, size: size)
+                        }
+                        dragCurrent = clampedPoint(value.location, size: size)
+                        hoveredSample = nil
+                    }
+                    .onEnded { value in
+                        let start = dragStart ?? clampedPoint(value.startLocation, size: size)
+                        let end = clampedPoint(value.location, size: size)
+                        if let nextZoom = zoomRange(from: selectionRect(from: start, to: end), size: size) {
+                            zoom = nextZoom
+                        }
+                        dragStart = nil
+                        dragCurrent = nil
+                    }
+            )
         }
     }
 
     private func graphPath(size: CGSize) -> Path {
         var path = Path()
+        let samples = visibleSamples
         guard let first = samples.first else {
             return path
         }
@@ -148,18 +199,25 @@ private struct DiskSpaceTrendGraph: View {
     }
 
     private func nearestSample(to location: CGPoint, size: CGSize) -> DiskSpaceSample? {
-        samples.min { lhs, rhs in
+        visibleSamples.min { lhs, rhs in
             abs(point(for: lhs, size: size).x - location.x) < abs(point(for: rhs, size: size).x - location.x)
         }
     }
 
     private var dateDomain: (min: Double, max: Double) {
+        if let zoom {
+            return (zoom.startTime, zoom.endTime)
+        }
         let values = samples.map { $0.sampledAt.timeIntervalSince1970 }
         return (values.min() ?? 0, values.max() ?? 0)
     }
 
     private var valueRange: (min: Double, max: Double) {
-        let values = samples.map { Double($0.availableBytes) }
+        if let zoom {
+            return (zoom.minAvailableBytes, zoom.maxAvailableBytes)
+        }
+
+        let values = visibleSamples.map { Double($0.availableBytes) }
         guard let min = values.min(), let maxValue = values.max() else {
             return (0, 0)
         }
@@ -177,10 +235,90 @@ private struct DiskSpaceTrendGraph: View {
         return CGPoint(x: x, y: min(max(y, 22), size.height - 22))
     }
 
+    private var visibleSamples: [DiskSpaceSample] {
+        guard let zoom else {
+            return samples
+        }
+
+        let filtered = samples.filter { sample in
+            let timestamp = sample.sampledAt.timeIntervalSince1970
+            return timestamp >= zoom.startTime && timestamp <= zoom.endTime
+        }
+        return filtered
+    }
+
+    private func activeSelectionRect(size: CGSize) -> CGRect? {
+        guard let dragStart, let dragCurrent else {
+            return nil
+        }
+        let rect = selectionRect(from: dragStart, to: dragCurrent)
+        guard rect.width >= 1, rect.height >= 1 else {
+            return nil
+        }
+        return rect.intersection(CGRect(origin: .zero, size: size))
+    }
+
+    private func selectionRect(from start: CGPoint, to end: CGPoint) -> CGRect {
+        CGRect(
+            x: min(start.x, end.x),
+            y: min(start.y, end.y),
+            width: abs(end.x - start.x),
+            height: abs(end.y - start.y)
+        )
+    }
+
+    private func zoomRange(from rect: CGRect, size: CGSize) -> DiskSpaceTrendGraphZoom? {
+        let rect = rect.intersection(CGRect(origin: .zero, size: size))
+        guard rect.width >= 14, rect.height >= 10 else {
+            return nil
+        }
+
+        let domain = dateDomain
+        let range = valueRange
+        guard domain.max > domain.min, range.max > range.min, size.width > 0, size.height > 0 else {
+            return nil
+        }
+
+        let startRatio = Double(rect.minX / size.width)
+        let endRatio = Double(rect.maxX / size.width)
+        let topRatio = Double(rect.minY / size.height)
+        let bottomRatio = Double(rect.maxY / size.height)
+
+        let startTime = domain.min + (domain.max - domain.min) * startRatio
+        let endTime = domain.min + (domain.max - domain.min) * endRatio
+        let maxAvailableBytes = range.max - (range.max - range.min) * topRatio
+        let minAvailableBytes = range.max - (range.max - range.min) * bottomRatio
+
+        guard endTime > startTime, maxAvailableBytes > minAvailableBytes else {
+            return nil
+        }
+
+        return DiskSpaceTrendGraphZoom(
+            startTime: startTime,
+            endTime: endTime,
+            minAvailableBytes: minAvailableBytes,
+            maxAvailableBytes: maxAvailableBytes
+        )
+    }
+
+    private func clampedPoint(_ point: CGPoint, size: CGSize) -> CGPoint {
+        CGPoint(
+            x: min(max(point.x, 0), size.width),
+            y: min(max(point.y, 0), size.height)
+        )
+    }
+
     private static let calloutFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter
     }()
+}
+
+private struct DiskSpaceTrendGraphZoom: Equatable {
+    let startTime: Double
+    let endTime: Double
+    let minAvailableBytes: Double
+    let maxAvailableBytes: Double
 }

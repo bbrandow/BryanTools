@@ -8,6 +8,7 @@ struct MacroTextSettingsView: View {
     @State private var recordingShortcut = false
     @State private var command = "/"
     @State private var replacement = ""
+    @State private var editingReplacement: MacroTextReplacement?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -20,7 +21,7 @@ struct MacroTextSettingsView: View {
                 }
             }
 
-            settingsSection("Add Replacement") {
+            settingsSection(editingReplacement == nil ? "Add Replacement" : "Edit Replacement") {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     TextField("/command", text: $command)
                         .textFieldStyle(.roundedBorder)
@@ -35,12 +36,20 @@ struct MacroTextSettingsView: View {
                         .lineLimit(1...4)
 
                     Button {
-                        addReplacement()
+                        saveReplacement()
                     } label: {
-                        Label("Add", systemImage: "plus")
+                        Label(editingReplacement == nil ? "Add" : "Save", systemImage: editingReplacement == nil ? "plus" : "checkmark")
                     }
                     .disabled(command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         || replacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if editingReplacement != nil {
+                        Button {
+                            clearEditor()
+                        } label: {
+                            Label("Cancel", systemImage: "xmark")
+                        }
+                    }
                 }
             }
 
@@ -53,7 +62,14 @@ struct MacroTextSettingsView: View {
                         ForEach(environment.replacements) { item in
                             MacroTextReplacementRow(
                                 replacement: item,
+                                isEditing: editingReplacement?.id == item.id,
+                                edit: {
+                                    editReplacement(item)
+                                },
                                 delete: {
+                                    if editingReplacement?.id == item.id {
+                                        clearEditor()
+                                    }
                                     environment.deleteReplacement(item)
                                 }
                             )
@@ -137,12 +153,28 @@ struct MacroTextSettingsView: View {
         }
     }
 
-    private func addReplacement() {
-        environment.addOrUpdateReplacement(command: command, replacement: replacement)
-        if environment.lastErrorMessage == nil {
-            command = "/"
-            replacement = ""
+    private func saveReplacement() {
+        if let editingReplacement {
+            environment.updateReplacement(editingReplacement, command: command, replacement: replacement)
+        } else {
+            environment.addOrUpdateReplacement(command: command, replacement: replacement)
         }
+
+        if environment.lastErrorMessage == nil {
+            clearEditor()
+        }
+    }
+
+    private func editReplacement(_ item: MacroTextReplacement) {
+        editingReplacement = item
+        command = item.command
+        replacement = item.replacement
+    }
+
+    private func clearEditor() {
+        editingReplacement = nil
+        command = "/"
+        replacement = ""
     }
 
     private func handleHotKeyEvent(_ event: NSEvent) -> Bool {
@@ -165,6 +197,8 @@ struct MacroTextSettingsView: View {
 
 private struct MacroTextReplacementRow: View {
     let replacement: MacroTextReplacement
+    let isEditing: Bool
+    let edit: () -> Void
     let delete: () -> Void
 
     var body: some View {
@@ -180,6 +214,13 @@ private struct MacroTextReplacementRow: View {
 
             Spacer(minLength: 12)
 
+            Button {
+                edit()
+            } label: {
+                Image(systemName: isEditing ? "pencil.circle.fill" : "pencil")
+            }
+            .help(isEditing ? "Editing replacement" : "Edit replacement")
+
             Button(role: .destructive) {
                 delete()
             } label: {
@@ -189,6 +230,6 @@ private struct MacroTextReplacementRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.45))
+        .background((isEditing ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor).opacity(0.45)))
     }
 }

@@ -85,6 +85,38 @@ final class MacroTextModule: ObservableObject, ToolModule {
         persistReplacements()
     }
 
+    func updateReplacement(_ replacement: MacroTextReplacement, command rawCommand: String, replacement rawReplacement: String) {
+        let command = normalizedCommand(rawCommand)
+        let replacementText = rawReplacement
+
+        guard isValidCommand(command) else {
+            lastErrorMessage = "MacroText command must start with / and contain no whitespace."
+            return
+        }
+        guard !replacementText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            lastErrorMessage = "MacroText replacement cannot be empty."
+            return
+        }
+        guard replacements.contains(where: { $0.id == replacement.id }) else {
+            lastErrorMessage = "MacroText replacement no longer exists."
+            return
+        }
+        guard !replacements.contains(where: { $0.id != replacement.id && $0.command == command }) else {
+            lastErrorMessage = "MacroText command already exists."
+            return
+        }
+
+        replacements = replacements.map { item in
+            guard item.id == replacement.id else {
+                return item
+            }
+            return MacroTextReplacement(id: item.id, command: command, replacement: replacementText)
+        }
+        replacements.sort { $0.command.localizedCaseInsensitiveCompare($1.command) == .orderedAscending }
+        persistReplacements()
+        lastErrorMessage = nil
+    }
+
     func updateHotKey(_ newHotKey: AppHotKey) {
         guard newHotKey.hasPrimaryModifier else {
             lastErrorMessage = "Shortcut must include Command, Control, or Option."
@@ -155,12 +187,13 @@ final class MacroTextModule: ObservableObject, ToolModule {
     }
 
     private func expand(_ replacement: MacroTextReplacement) {
+        let resolvedReplacement = MacroTextTemplateRenderer.render(replacement.replacement)
         eventTap?.suppressEventsForExpansion()
         MacroTextTextInjector.replaceTypedCommand(
             commandLength: replacement.command.count,
-            with: replacement.replacement
+            with: resolvedReplacement
         )
-        lastExpansion = "\(replacement.command) -> \(replacement.replacement)"
+        lastExpansion = "\(replacement.command) -> \(resolvedReplacement)"
     }
 
     private func persistReplacements() {

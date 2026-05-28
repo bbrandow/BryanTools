@@ -8,15 +8,19 @@ public struct DiskSpaceMonitorPreferences: Equatable {
     public static let defaultWarningThresholdGB = 50
     public static let minimumWarningThresholdGB = 1
     public static let maximumWarningThresholdGB = 9_999
+    public static let minimumVisibleHistoryHours = 1
+    public static let maximumVisibleHistoryHours = retentionDays * 24
     public static let pollInterval: TimeInterval = 5 * 60
     public static let retentionDays = 30
 
     public var isEnabled: Bool
     public var warningThresholdGB: Int
+    public var visibleHistoryHours: Int?
 
-    public init(isEnabled: Bool, warningThresholdGB: Int) {
+    public init(isEnabled: Bool, warningThresholdGB: Int, visibleHistoryHours: Int? = nil) {
         self.isEnabled = isEnabled
         self.warningThresholdGB = Self.clampedWarningThresholdGB(warningThresholdGB)
+        self.visibleHistoryHours = Self.clampedVisibleHistoryHours(visibleHistoryHours)
     }
 
     public static func load(defaults: UserDefaults = .standard) -> DiskSpaceMonitorPreferences {
@@ -29,20 +33,41 @@ public struct DiskSpaceMonitorPreferences: Equatable {
 
         let threshold = defaults.object(forKey: "diskSpaceMonitor.warningThresholdGB") as? Int
             ?? defaultWarningThresholdGB
+        let visibleHistoryHours = defaults.object(forKey: "diskSpaceMonitor.visibleHistoryHours") as? Int
 
         return DiskSpaceMonitorPreferences(
             isEnabled: enabled,
-            warningThresholdGB: threshold
+            warningThresholdGB: threshold,
+            visibleHistoryHours: visibleHistoryHours
         )
     }
 
     public func save(defaults: UserDefaults = .standard) {
         defaults.set(isEnabled, forKey: "diskSpaceMonitor.isEnabled")
         defaults.set(warningThresholdGB, forKey: "diskSpaceMonitor.warningThresholdGB")
+        if let visibleHistoryHours {
+            defaults.set(visibleHistoryHours, forKey: "diskSpaceMonitor.visibleHistoryHours")
+        } else {
+            defaults.removeObject(forKey: "diskSpaceMonitor.visibleHistoryHours")
+        }
     }
 
     public static func clampedWarningThresholdGB(_ value: Int) -> Int {
         min(max(value, minimumWarningThresholdGB), maximumWarningThresholdGB)
+    }
+
+    public static func clampedVisibleHistoryHours(_ value: Int?) -> Int? {
+        guard let value else {
+            return nil
+        }
+        return min(max(value, minimumVisibleHistoryHours), maximumVisibleHistoryHours)
+    }
+
+    public static func selectedHistoryHours(startTime: TimeInterval, endTime: TimeInterval) -> Int? {
+        guard endTime > startTime else {
+            return nil
+        }
+        return clampedVisibleHistoryHours(Int(ceil((endTime - startTime) / 3_600)))
     }
 }
 
@@ -83,6 +108,16 @@ public enum DiskSpaceMonitorDisplay {
 
     public static func isBelowWarningThreshold(availableBytes: Int64, thresholdGB: Int) -> Bool {
         availableBytes < warningThresholdBytes(thresholdGB: thresholdGB)
+    }
+
+    public static func samples(_ samples: [DiskSpaceSample], visibleHistoryHours: Int?) -> [DiskSpaceSample] {
+        guard let visibleHistoryHours = DiskSpaceMonitorPreferences.clampedVisibleHistoryHours(visibleHistoryHours),
+              let latestDate = samples.map(\.sampledAt).max() else {
+            return samples
+        }
+
+        let cutoffDate = latestDate.addingTimeInterval(-Double(visibleHistoryHours) * 3_600)
+        return samples.filter { $0.sampledAt >= cutoffDate }
     }
 }
 

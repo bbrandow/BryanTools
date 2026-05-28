@@ -17,6 +17,10 @@ struct BryanToolsMenuContent: View {
 
         Divider()
 
+        MouseMacroMenuContent(environment: environment.mouseMacro)
+
+        Divider()
+
         QuickTaskMenuContent(environment: environment.quickTask)
 
         Divider()

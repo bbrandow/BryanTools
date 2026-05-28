@@ -4,7 +4,7 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
     case clipboardHistory
     case colorPicker
     case macroText
-    case logiShot
+    case mouseMacro
     case quickTask
     case shotFloat
     case screenOCR
@@ -23,8 +23,8 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
             return "ColorPicker"
         case .macroText:
             return "MacroText"
-        case .logiShot:
-            return "LogiShot"
+        case .mouseMacro:
+            return "MouseMacro"
         case .quickTask:
             return "QuickTask"
         case .shotFloat:

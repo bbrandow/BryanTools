@@ -1,5 +1,6 @@
 import AppKit
 import BryanToolsShared
+import Carbon
 import ClipboardHistoryCore
 import Darwin
 import Foundation
@@ -504,6 +505,40 @@ private func testQuickTaskDefaultHotKey() throws {
     )
 }
 
+private func testQuickTaskCommandLinePrefix() throws {
+    try expect(
+        QuickTaskCommandLine.commandText(fromPrefixedQuery: ">pwd") == "pwd",
+        "Expected QuickTask command mode to strip the command prefix"
+    )
+    try expect(
+        QuickTaskCommandLine.commandText(fromPrefixedQuery: "> pwd") == "pwd",
+        "Expected QuickTask command mode to strip one leading space after the prefix"
+    )
+    try expect(
+        QuickTaskCommandLine.commandText(fromPrefixedQuery: "pwd") == nil,
+        "Expected QuickTask command mode to require the command prefix"
+    )
+}
+
+private func testMouseMacroCommandParser() throws {
+    let command = try require(
+        MouseMacroCommandParser.parse("cmd+shift+ctrl+4")?.first,
+        "Expected MouseMacro command to parse"
+    )
+    try expect(
+        command.keyCode == UInt16(kVK_ANSI_4),
+        "Expected MouseMacro command parser to resolve key 4"
+    )
+    try expect(
+        command.flags.contains([.maskCommand, .maskShift, .maskControl]),
+        "Expected MouseMacro command parser to resolve command, shift, and control modifiers"
+    )
+    try expect(
+        MouseMacroCommandParser.parse("") == nil,
+        "Expected MouseMacro command parser to reject empty commands"
+    )
+}
+
 private func testShotFloatDefaultHotKey() throws {
     try expect(
         AppHotKey.defaultShotFloatValue.displayString == "Command-Shift-2",
@@ -655,6 +690,65 @@ private func testDiskSpacePreferencesDefaults() throws {
     try expect(
         DiskSpaceMonitorPreferences.pollInterval == 5 * 60,
         "Expected Disk Space Monitor poll interval to be five minutes"
+    )
+    try expect(
+        preferences.visibleHistoryHours == nil,
+        "Expected Disk Space Monitor to default to full graph history"
+    )
+}
+
+private func testDiskSpaceVisibleHistoryPreferences() throws {
+    let (defaults, suiteName) = try makeTemporaryDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    var preferences = DiskSpaceMonitorPreferences(isEnabled: true, warningThresholdGB: 50, visibleHistoryHours: 12)
+    preferences.save(defaults: defaults)
+
+    try expect(
+        DiskSpaceMonitorPreferences.load(defaults: defaults).visibleHistoryHours == 12,
+        "Expected Disk Space Monitor visible graph hours to persist"
+    )
+
+    preferences.visibleHistoryHours = nil
+    preferences.save(defaults: defaults)
+
+    try expect(
+        DiskSpaceMonitorPreferences.load(defaults: defaults).visibleHistoryHours == nil,
+        "Expected blank Disk Space Monitor visible graph hours to persist as full history"
+    )
+}
+
+private func testDiskSpaceVisibleHistoryFilteringAndSelection() throws {
+    let baseDate = Date(timeIntervalSince1970: 1_800_000_000)
+    let samples = [
+        DiskSpaceSample(
+            sampledAt: baseDate.addingTimeInterval(-10 * 3_600),
+            availableBytes: 90_000_000_000,
+            totalBytes: 500_000_000_000
+        ),
+        DiskSpaceSample(
+            sampledAt: baseDate.addingTimeInterval(-2 * 3_600),
+            availableBytes: 100_000_000_000,
+            totalBytes: 500_000_000_000
+        ),
+        DiskSpaceSample(
+            sampledAt: baseDate,
+            availableBytes: 101_000_000_000,
+            totalBytes: 500_000_000_000
+        )
+    ]
+
+    try expect(
+        DiskSpaceMonitorDisplay.samples(samples, visibleHistoryHours: nil) == samples,
+        "Expected blank Disk Space Monitor visible graph hours to show full history"
+    )
+    try expect(
+        DiskSpaceMonitorDisplay.samples(samples, visibleHistoryHours: 3) == Array(samples.dropFirst()),
+        "Expected Disk Space Monitor visible graph hours to filter from the latest sample"
+    )
+    try expect(
+        DiskSpaceMonitorPreferences.selectedHistoryHours(startTime: baseDate.timeIntervalSince1970 - 2.4 * 3_600, endTime: baseDate.timeIntervalSince1970) == 3,
+        "Expected dragged Disk Space Monitor graph selection to round up to whole hours"
     )
 }
 
@@ -882,6 +976,8 @@ private let tests: [(String, () throws -> Void)] = [
     ("MacroText date template day offset", testMacroTextDateTemplateDayOffset),
     ("MacroText non-date braces", testMacroTextTemplateLeavesNonDateBracesUntouched),
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
+    ("QuickTask command line prefix", testQuickTaskCommandLinePrefix),
+    ("MouseMacro command parser", testMouseMacroCommandParser),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
     ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),
     ("TrayCal tool identifier", testTrayCalToolIdentifier),
@@ -893,6 +989,8 @@ private let tests: [(String, () throws -> Void)] = [
     ("Disk Space display formatting", testDiskSpaceDisplayFormatting),
     ("Disk Space warning threshold", testDiskSpaceWarningThreshold),
     ("Disk Space preference defaults", testDiskSpacePreferencesDefaults),
+    ("Disk Space visible history preferences", testDiskSpaceVisibleHistoryPreferences),
+    ("Disk Space visible history filtering and selection", testDiskSpaceVisibleHistoryFilteringAndSelection),
     ("Disk Space sample store retention", testDiskSpaceSampleStoreRetention),
     ("Screen OCR text formatter", testScreenOCRTextFormatterSortsAndTrimsLines),
     ("Screen OCR text history capture", testClipboardHistoryTextRecorderCapturesRecognizedText),

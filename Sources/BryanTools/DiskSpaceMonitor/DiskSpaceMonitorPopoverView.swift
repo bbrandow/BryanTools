@@ -4,7 +4,7 @@ import SwiftUI
 struct DiskSpaceMonitorPopoverView: View {
     @ObservedObject var environment: DiskSpaceMonitorModule
     @State private var hoveredSample: DiskSpaceSample?
-    @State private var graphZoom: DiskSpaceTrendGraphZoom?
+    @State private var historyHoursText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -19,21 +19,49 @@ struct DiskSpaceMonitorPopoverView: View {
 
                 Spacer()
 
-                if graphZoom != nil {
+                if environment.visibleHistoryHours != nil {
                     Button {
-                        graphZoom = nil
                         hoveredSample = nil
+                        environment.updateVisibleHistoryHours(nil)
+                        syncHistoryHoursText()
                     } label: {
-                        Label("Reset Zoom", systemImage: "arrow.counterclockwise")
+                        Label("Show Full History", systemImage: "arrow.counterclockwise")
                     }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
-                    .help("Reset graph zoom")
+                    .help("Show full history")
                 }
 
                 Text(environment.trayTitle)
                     .font(.system(size: 22, weight: .semibold, design: .monospaced))
                     .foregroundStyle(environment.isBelowWarningThreshold ? Color.red : Color.primary)
+            }
+
+            HStack(spacing: 7) {
+                Text("Show last")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                TextField("all", text: $historyHoursText)
+                    .font(.system(.caption, design: .monospaced))
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 46)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(commitHistoryHoursText)
+
+                Text("hours")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    environment.measureNow()
+                } label: {
+                    Label("Now", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+                .help("Check free space now")
             }
 
             if environment.samples.isEmpty {
@@ -44,8 +72,16 @@ struct DiskSpaceMonitorPopoverView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             } else {
-                DiskSpaceTrendGraph(samples: environment.samples, zoom: $graphZoom, hoveredSample: $hoveredSample)
-                    .frame(height: 112)
+                DiskSpaceTrendGraph(
+                    samples: visibleSamples,
+                    hoveredSample: $hoveredSample,
+                    selectedHours: { hours in
+                        hoveredSample = nil
+                        environment.updateVisibleHistoryHours(hours)
+                        syncHistoryHoursText()
+                    }
+                )
+                .frame(height: 112)
 
                 HStack {
                     Text(hoverText)
@@ -59,8 +95,17 @@ struct DiskSpaceMonitorPopoverView: View {
             }
         }
         .padding(14)
-        .frame(width: 300, height: 210, alignment: .topLeading)
+        .frame(width: 300, height: 238, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            syncHistoryHoursText()
+        }
+        .onDisappear {
+            commitHistoryHoursText()
+        }
+        .onChange(of: environment.visibleHistoryHours) { _, _ in
+            syncHistoryHoursText()
+        }
     }
 
     private var lastMeasuredText: String {
@@ -71,10 +116,31 @@ struct DiskSpaceMonitorPopoverView: View {
     }
 
     private var hoverText: String {
-        guard let sample = hoveredSample ?? environment.latestSample else {
+        guard let sample = hoveredSample ?? visibleSamples.last ?? environment.latestSample else {
             return ""
         }
         return "\(Self.dateFormatter.string(from: sample.sampledAt)) - \(DiskSpaceMonitorDisplay.trayTitle(availableBytes: sample.availableBytes)) free"
+    }
+
+    private var visibleSamples: [DiskSpaceSample] {
+        DiskSpaceMonitorDisplay.samples(
+            environment.samples,
+            visibleHistoryHours: environment.visibleHistoryHours
+        )
+    }
+
+    private func commitHistoryHoursText() {
+        let filtered = historyHoursText.filter(\.isNumber)
+        if filtered.isEmpty {
+            environment.updateVisibleHistoryHours(nil)
+        } else if let value = Int(filtered) {
+            environment.updateVisibleHistoryHours(value)
+        }
+        syncHistoryHoursText()
+    }
+
+    private func syncHistoryHoursText() {
+        historyHoursText = environment.visibleHistoryHours.map(String.init) ?? ""
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -87,8 +153,8 @@ struct DiskSpaceMonitorPopoverView: View {
 
 private struct DiskSpaceTrendGraph: View {
     let samples: [DiskSpaceSample]
-    @Binding var zoom: DiskSpaceTrendGraphZoom?
     @Binding var hoveredSample: DiskSpaceSample?
+    let selectedHours: (Int) -> Void
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
 
@@ -154,8 +220,8 @@ private struct DiskSpaceTrendGraph: View {
                     .onEnded { value in
                         let start = dragStart ?? clampedPoint(value.startLocation, size: size)
                         let end = clampedPoint(value.location, size: size)
-                        if let nextZoom = zoomRange(from: selectionRect(from: start, to: end), size: size) {
-                            zoom = nextZoom
+                        if let hours = selectedHistoryHours(from: selectionRect(from: start, to: end), size: size) {
+                            selectedHours(hours)
                         }
                         dragStart = nil
                         dragCurrent = nil
@@ -166,7 +232,6 @@ private struct DiskSpaceTrendGraph: View {
 
     private func graphPath(size: CGSize) -> Path {
         var path = Path()
-        let samples = visibleSamples
         guard let first = samples.first else {
             return path
         }
@@ -199,25 +264,18 @@ private struct DiskSpaceTrendGraph: View {
     }
 
     private func nearestSample(to location: CGPoint, size: CGSize) -> DiskSpaceSample? {
-        visibleSamples.min { lhs, rhs in
+        samples.min { lhs, rhs in
             abs(point(for: lhs, size: size).x - location.x) < abs(point(for: rhs, size: size).x - location.x)
         }
     }
 
     private var dateDomain: (min: Double, max: Double) {
-        if let zoom {
-            return (zoom.startTime, zoom.endTime)
-        }
         let values = samples.map { $0.sampledAt.timeIntervalSince1970 }
         return (values.min() ?? 0, values.max() ?? 0)
     }
 
     private var valueRange: (min: Double, max: Double) {
-        if let zoom {
-            return (zoom.minAvailableBytes, zoom.maxAvailableBytes)
-        }
-
-        let values = visibleSamples.map { Double($0.availableBytes) }
+        let values = samples.map { Double($0.availableBytes) }
         guard let min = values.min(), let maxValue = values.max() else {
             return (0, 0)
         }
@@ -233,18 +291,6 @@ private struct DiskSpaceTrendGraph: View {
         let x = min(max(point.x, 58), size.width - 58)
         let y = point.y < 34 ? point.y + 32 : point.y - 30
         return CGPoint(x: x, y: min(max(y, 22), size.height - 22))
-    }
-
-    private var visibleSamples: [DiskSpaceSample] {
-        guard let zoom else {
-            return samples
-        }
-
-        let filtered = samples.filter { sample in
-            let timestamp = sample.sampledAt.timeIntervalSince1970
-            return timestamp >= zoom.startTime && timestamp <= zoom.endTime
-        }
-        return filtered
     }
 
     private func activeSelectionRect(size: CGSize) -> CGRect? {
@@ -267,38 +313,22 @@ private struct DiskSpaceTrendGraph: View {
         )
     }
 
-    private func zoomRange(from rect: CGRect, size: CGSize) -> DiskSpaceTrendGraphZoom? {
+    private func selectedHistoryHours(from rect: CGRect, size: CGSize) -> Int? {
         let rect = rect.intersection(CGRect(origin: .zero, size: size))
-        guard rect.width >= 14, rect.height >= 10 else {
+        guard rect.width >= 14 else {
             return nil
         }
 
         let domain = dateDomain
-        let range = valueRange
-        guard domain.max > domain.min, range.max > range.min, size.width > 0, size.height > 0 else {
+        guard domain.max > domain.min, size.width > 0 else {
             return nil
         }
 
         let startRatio = Double(rect.minX / size.width)
         let endRatio = Double(rect.maxX / size.width)
-        let topRatio = Double(rect.minY / size.height)
-        let bottomRatio = Double(rect.maxY / size.height)
-
         let startTime = domain.min + (domain.max - domain.min) * startRatio
         let endTime = domain.min + (domain.max - domain.min) * endRatio
-        let maxAvailableBytes = range.max - (range.max - range.min) * topRatio
-        let minAvailableBytes = range.max - (range.max - range.min) * bottomRatio
-
-        guard endTime > startTime, maxAvailableBytes > minAvailableBytes else {
-            return nil
-        }
-
-        return DiskSpaceTrendGraphZoom(
-            startTime: startTime,
-            endTime: endTime,
-            minAvailableBytes: minAvailableBytes,
-            maxAvailableBytes: maxAvailableBytes
-        )
+        return DiskSpaceMonitorPreferences.selectedHistoryHours(startTime: startTime, endTime: endTime)
     }
 
     private func clampedPoint(_ point: CGPoint, size: CGSize) -> CGPoint {
@@ -314,11 +344,4 @@ private struct DiskSpaceTrendGraph: View {
         formatter.timeStyle = .short
         return formatter
     }()
-}
-
-private struct DiskSpaceTrendGraphZoom: Equatable {
-    let startTime: Double
-    let endTime: Double
-    let minAvailableBytes: Double
-    let maxAvailableBytes: Double
 }

@@ -11,8 +11,10 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     static let maximumPanelSize = NSSize(width: 1_100, height: 560)
     static let applicationRowHeight = CGFloat(60)
     static let calculationRowHeight = CGFloat(100)
+    static let commandResultRowHeight = CGFloat(180)
     static let applicationResultBottomPadding = CGFloat(52)
     static let calculationResultBottomPadding = CGFloat(20)
+    static let commandResultBottomPadding = CGFloat(20)
     static let minimumApplicationResultRows = 3
 
     let id = ToolIdentifier.quickTask
@@ -23,13 +25,14 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     @Published private(set) var hotKey: AppHotKey
     @Published var query = "" {
         didSet {
-            formatQueryIfNeeded()
-            updateResults()
+            handleQueryChanged()
         }
     }
+    @Published private(set) var mode: QuickTaskMode = .search
     @Published private(set) var applications: [QuickTaskApplication] = []
     @Published private(set) var matches: [QuickTaskApplication] = []
     @Published private(set) var calculationResult: String?
+    @Published private(set) var commandResult: QuickTaskCommandResult?
     @Published private(set) var focusRequestID = 0
     @Published var lastErrorMessage: String?
 
@@ -44,6 +47,9 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     }
 
     var resultContentHeight: CGFloat {
+        if commandResult != nil {
+            return Self.commandResultRowHeight + Self.commandResultBottomPadding
+        }
         if calculationResult != nil {
             return Self.calculationRowHeight + Self.calculationResultBottomPadding
         }
@@ -58,7 +64,10 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     }
 
     var resultBottomPadding: CGFloat {
-        calculationResult != nil
+        if commandResult != nil {
+            return Self.commandResultBottomPadding
+        }
+        return calculationResult != nil
             ? Self.calculationResultBottomPadding
             : Self.applicationResultBottomPadding
     }
@@ -71,8 +80,11 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     private var preferences: QuickTaskPreferences
     private var isRunning = false
     private var isFormattingQuery = false
+    private var isNormalizingCommandMode = false
     private var retainedQueryClearWorkItem: DispatchWorkItem?
     private var retainedQueryExpiresAt: Date?
+    private var commandTask: Task<Void, Never>?
+    private var commandRunID = UUID()
     private lazy var panelController = QuickTaskPanelController(environment: self)
 
     private init(preferences: QuickTaskPreferences) {
@@ -89,6 +101,8 @@ final class QuickTaskModule: ObservableObject, ToolModule {
 
     func stop() {
         isRunning = false
+        commandTask?.cancel()
+        commandRunID = UUID()
         hotKeyController.unregisterAll()
         panelController.close()
     }
@@ -120,7 +134,7 @@ final class QuickTaskModule: ObservableObject, ToolModule {
 
     func closeQuickTask() {
         cancelRetainedQueryClear()
-        query = ""
+        clearInputState()
         panelController.close()
     }
 
@@ -137,7 +151,15 @@ final class QuickTaskModule: ObservableObject, ToolModule {
     func submitQuery() {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
+            if mode == .commandLine {
+                return
+            }
             closeQuickTask()
+            return
+        }
+
+        if mode == .commandLine {
+            runCommand(trimmed)
             return
         }
 
@@ -184,7 +206,32 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         updateHotKey(.defaultQuickTaskValue)
     }
 
+    func enterCommandLineMode(initialCommand: String = "") {
+        mode = .commandLine
+        commandResult = nil
+        query = initialCommand
+        updateResults()
+    }
+
+    func exitCommandLineModeIfEmpty() -> Bool {
+        guard mode == .commandLine,
+              query.isEmpty else {
+            return false
+        }
+        mode = .search
+        commandResult = nil
+        updateResults()
+        return true
+    }
+
     private func updateResults() {
+        if mode == .commandLine {
+            matches = []
+            calculationResult = nil
+            panelController.updateSize()
+            return
+        }
+
         matches = QuickTaskApplicationIndex.matches(for: query, applications: applications)
         if let value = QuickTaskCalculator.evaluate(query) {
             calculationResult = QuickTaskCalculator.formatted(value)
@@ -194,11 +241,37 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         panelController.updateSize()
     }
 
+    private func handleQueryChanged() {
+        guard !isNormalizingCommandMode else {
+            updateResults()
+            return
+        }
+
+        if mode == .search,
+           let commandText = QuickTaskCommandLine.commandText(fromPrefixedQuery: query) {
+            isNormalizingCommandMode = true
+            enterCommandLineMode(initialCommand: commandText)
+            isNormalizingCommandMode = false
+            return
+        }
+
+        if mode == .search {
+            formatQueryIfNeeded()
+        } else if commandResult?.command != query {
+            commandResult = nil
+        }
+
+        updateResults()
+    }
+
     private func requestInputFocus() {
         focusRequestID += 1
     }
 
     private func formatQueryIfNeeded() {
+        guard mode == .search else {
+            return
+        }
         guard !isFormattingQuery else {
             return
         }
@@ -221,6 +294,37 @@ final class QuickTaskModule: ObservableObject, ToolModule {
         NSPasteboard.general.setString(calculationResult, forType: .string)
     }
 
+    private func runCommand(_ command: String) {
+        commandTask?.cancel()
+        let runID = UUID()
+        commandRunID = runID
+        commandResult = .running(command: command)
+        lastErrorMessage = nil
+        updateResults()
+
+        commandTask = Task { [weak self] in
+            let result = await QuickTaskCommandRunner.run(command)
+            await MainActor.run {
+                guard let self,
+                      self.commandRunID == runID else {
+                    return
+                }
+                self.commandResult = result
+                self.lastErrorMessage = result.exitCode == 0 ? nil : "Command exited with status \(result.exitCodeDescription)."
+                self.updateResults()
+            }
+        }
+    }
+
+    private func clearInputState() {
+        commandTask?.cancel()
+        commandRunID = UUID()
+        mode = .search
+        commandResult = nil
+        query = ""
+        updateResults()
+    }
+
     private func scheduleRetainedQueryClearIfNeeded() {
         cancelRetainedQueryClear()
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -237,7 +341,7 @@ final class QuickTaskModule: ObservableObject, ToolModule {
                       !self.panelController.isVisible else {
                     return
                 }
-                self.query = ""
+                self.clearInputState()
                 self.retainedQueryExpiresAt = nil
                 self.retainedQueryClearWorkItem = nil
             }

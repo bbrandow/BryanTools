@@ -13,6 +13,7 @@ final class DiskSpaceMonitorModule: NSObject, ObservableObject, ToolModule, NSPo
 
     @Published private(set) var isEnabled: Bool
     @Published private(set) var warningThresholdGB: Int
+    @Published private(set) var visibleHistoryHours: Int?
     @Published private(set) var latestSample: DiskSpaceSample?
     @Published private(set) var samples: [DiskSpaceSample] = []
     @Published var lastErrorMessage: String?
@@ -30,6 +31,7 @@ final class DiskSpaceMonitorModule: NSObject, ObservableObject, ToolModule, NSPo
         self.preferences = preferences
         self.isEnabled = preferences.isEnabled
         self.warningThresholdGB = preferences.warningThresholdGB
+        self.visibleHistoryHours = preferences.visibleHistoryHours
         super.init()
     }
 
@@ -103,6 +105,16 @@ final class DiskSpaceMonitorModule: NSObject, ObservableObject, ToolModule, NSPo
         preferences.warningThresholdGB = clamped
         preferences.save()
         updateStatusItem()
+    }
+
+    func updateVisibleHistoryHours(_ value: Int?) {
+        let clamped = DiskSpaceMonitorPreferences.clampedVisibleHistoryHours(value)
+        guard clamped != visibleHistoryHours else {
+            return
+        }
+        visibleHistoryHours = clamped
+        preferences.visibleHistoryHours = clamped
+        preferences.save()
     }
 
     func measureNow() {
@@ -230,7 +242,7 @@ final class DiskSpaceMonitorModule: NSObject, ObservableObject, ToolModule, NSPo
     private func makePopover() -> NSPopover {
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 300, height: 210)
+        popover.contentSize = NSSize(width: 300, height: 238)
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: DiskSpaceMonitorPopoverView(environment: self))
         return popover

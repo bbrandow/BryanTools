@@ -1,5 +1,6 @@
 import AppKit
 import BryanToolsShared
+import Carbon
 import SwiftUI
 
 struct QuickTaskView: View {
@@ -63,7 +64,7 @@ struct QuickTaskView: View {
     }
 
     private var shouldShowResults: Bool {
-        environment.calculationResult != nil || !environment.matches.isEmpty
+        environment.commandResult != nil || environment.calculationResult != nil || !environment.matches.isEmpty
     }
 
     private var inputBar: some View {
@@ -71,7 +72,7 @@ struct QuickTaskView: View {
             leadingIcon
                 .frame(width: 28, height: 28)
 
-            TextField("Search apps or calculate", text: $environment.query)
+            TextField(placeholderText, text: $environment.query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 30, weight: .regular))
                 .focused($searchFocused)
@@ -97,7 +98,11 @@ struct QuickTaskView: View {
 
     @ViewBuilder
     private var leadingIcon: some View {
-        if environment.calculationResult != nil {
+        if environment.mode == .commandLine {
+            Text(">")
+                .font(.system(size: 28, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.secondary)
+        } else if environment.calculationResult != nil {
             Image(systemName: "function")
                 .foregroundStyle(.secondary)
         } else {
@@ -107,10 +112,16 @@ struct QuickTaskView: View {
         }
     }
 
+    private var placeholderText: String {
+        environment.mode == .commandLine ? "Run shell command" : "Search apps or calculate"
+    }
+
     @ViewBuilder
     private var results: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let calculationResult = environment.calculationResult {
+            if let commandResult = environment.commandResult {
+                QuickTaskCommandResultRow(result: commandResult)
+            } else if let calculationResult = environment.calculationResult {
                 QuickTaskCalculationRow(expression: environment.query, result: calculationResult)
             } else if !environment.matches.isEmpty {
                 ForEach(environment.matches) { app in
@@ -132,17 +143,26 @@ struct QuickTaskView: View {
     }
 
     private func handleKey(_ event: NSEvent) -> Bool {
+        if environment.mode == .search,
+           environment.query.isEmpty,
+           event.characters == ">" {
+            environment.enterCommandLineMode()
+            return true
+        }
+
         switch event.keyCode {
-        case 53:
+        case UInt16(kVK_Escape):
             environment.dismissQuickTask()
             return true
-        case 36, 76:
+        case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
             submit()
             return true
-        case 48, 125:
+        case UInt16(kVK_Delete), UInt16(kVK_ForwardDelete):
+            return environment.exitCommandLineModeIfEmpty()
+        case UInt16(kVK_Tab), UInt16(kVK_DownArrow):
             selectNextApplication()
             return true
-        case 126:
+        case UInt16(kVK_UpArrow):
             selectPreviousApplication()
             return true
         default:
@@ -191,6 +211,59 @@ struct QuickTaskView: View {
         }
         let previousIndex = max(index - 1, 0)
         self.selectedApplicationID = environment.matches[previousIndex].id
+    }
+}
+
+private struct QuickTaskCommandResultRow: View {
+    let result: QuickTaskCommandResult
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "terminal")
+                .foregroundStyle(.secondary)
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text(result.command)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if result.isRunning {
+                        ProgressView()
+                            .scaleEffect(0.55)
+                            .frame(width: 18, height: 18)
+                    } else {
+                        Text("exit \(result.exitCodeDescription)")
+                            .font(.caption)
+                            .foregroundStyle(result.exitCode == 0 ? Color.secondary : Color.red)
+                    }
+                }
+
+                ScrollView {
+                    Text(outputText)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+            }
+        }
+        .padding(16)
+        .frame(height: QuickTaskModule.commandResultRowHeight)
+    }
+
+    private var outputText: String {
+        if result.isRunning {
+            return "Running..."
+        }
+        if result.output.isEmpty {
+            return "No output"
+        }
+        return result.output
     }
 }
 

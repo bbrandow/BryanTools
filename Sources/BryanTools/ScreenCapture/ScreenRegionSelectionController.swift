@@ -13,6 +13,7 @@ final class ScreenRegionSelectionController {
     private let onSelection: (ScreenRegionSelection) -> Void
     private let onCancel: () -> Void
     private var windows: [NSWindow] = []
+    private var didPushCrosshairCursor = false
 
     init(
         captures: [ColorPickerScreenCapture],
@@ -26,6 +27,7 @@ final class ScreenRegionSelectionController {
 
     func show() {
         close()
+        NSApp.activate(ignoringOtherApps: true)
         windows = captures.map { capture in
             let view = ScreenRegionSelectionView(
                 capture: capture,
@@ -37,19 +39,25 @@ final class ScreenRegionSelectionController {
             let window = ScreenRegionSelectionWindow(capture: capture, contentView: view)
             window.orderFrontRegardless()
             window.makeKey()
+            window.invalidateCursorRects(for: view)
             return window
         }
-        NSCursor.crosshair.set()
-        NSApp.activate(ignoringOtherApps: true)
+        pushCrosshairCursor()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.didPushCrosshairCursor else {
+                return
+            }
+            NSCursor.crosshair.set()
+        }
     }
 
     func close() {
+        popCrosshairCursor()
         for window in windows {
             window.orderOut(nil)
             window.contentView = nil
         }
         windows.removeAll()
-        NSCursor.arrow.set()
     }
 
     private func select(capture: ColorPickerScreenCapture, rect: CGRect) {
@@ -70,6 +78,22 @@ final class ScreenRegionSelectionController {
                 globalRect: selectedRect
             )
         )
+    }
+
+    private func pushCrosshairCursor() {
+        guard !didPushCrosshairCursor else {
+            return
+        }
+        NSCursor.crosshair.push()
+        didPushCrosshairCursor = true
+    }
+
+    private func popCrosshairCursor() {
+        guard didPushCrosshairCursor else {
+            return
+        }
+        NSCursor.pop()
+        didPushCrosshairCursor = false
     }
 }
 
@@ -132,6 +156,7 @@ private final class ScreenRegionSelectionView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
+        window?.invalidateCursorRects(for: self)
         NSCursor.crosshair.set()
     }
 
@@ -139,7 +164,16 @@ private final class ScreenRegionSelectionView: NSView {
         addCursorRect(bounds, cursor: .crosshair)
     }
 
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.crosshair.set()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.crosshair.set()
+    }
+
     override func mouseDown(with event: NSEvent) {
+        NSCursor.crosshair.set()
         let point = globalPoint(for: event)
         startGlobalPoint = point
         currentGlobalPoint = point
@@ -147,6 +181,7 @@ private final class ScreenRegionSelectionView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        NSCursor.crosshair.set()
         currentGlobalPoint = globalPoint(for: event)
         needsDisplay = true
     }
@@ -177,25 +212,17 @@ private final class ScreenRegionSelectionView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let dimPath = NSBezierPath(rect: bounds)
-        if let selectionViewRect {
-            dimPath.append(NSBezierPath(rect: selectionViewRect))
-            dimPath.windingRule = .evenOdd
-        }
-        NSColor.black.withAlphaComponent(0.18).setFill()
-        dimPath.fill()
-
         guard let selectionViewRect else {
             return
         }
 
-        NSColor.white.withAlphaComponent(0.95).setStroke()
+        NSColor.black.withAlphaComponent(0.65).setStroke()
         let outer = NSBezierPath(rect: selectionViewRect)
-        outer.lineWidth = 2
+        outer.lineWidth = 3
         outer.stroke()
 
-        NSColor.systemBlue.withAlphaComponent(0.9).setStroke()
-        let inner = NSBezierPath(rect: selectionViewRect.insetBy(dx: 1, dy: 1))
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        let inner = NSBezierPath(rect: selectionViewRect.insetBy(dx: 1.5, dy: 1.5))
         inner.lineWidth = 1
         inner.stroke()
     }

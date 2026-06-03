@@ -24,6 +24,7 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
     private var notificationTokens: [NSObjectProtocol] = []
     private var workspaceNotificationTokens: [NSObjectProtocol] = []
     private var isRunning = false
+    private var lastPopoverClosedAt: Date?
     private var showSettingsHandler: ActionHandler?
     private var quitHandler: ActionHandler?
 
@@ -139,6 +140,7 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
     }
 
     func popoverDidClose(_ notification: Notification) {
+        lastPopoverClosedAt = Date()
         statusItem?.button?.state = .off
     }
 
@@ -171,6 +173,7 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
         let popover = popover ?? makePopover()
         self.popover = popover
         refreshDate()
+        resetDisplayedMonthIfNeeded(openingAt: today)
         button.title = statusTitle
         button.state = .on
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -229,6 +232,17 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
     private func handleDateRefreshTrigger() {
         refreshDate()
         scheduleDateRefreshTimer()
+    }
+
+    private func resetDisplayedMonthIfNeeded(openingAt openingDate: Date) {
+        guard TrayCalCalendar.shouldResetPopoverAfterClose(
+            closedAt: lastPopoverClosedAt,
+            openingAt: openingDate
+        ) else {
+            return
+        }
+        state.returnToToday(openingDate, calendar: calendar)
+        lastPopoverClosedAt = nil
     }
 
     private func refreshDate() {

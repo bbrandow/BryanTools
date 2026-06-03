@@ -111,13 +111,14 @@ public enum DiskSpaceMonitorDisplay {
     }
 
     public static func samples(_ samples: [DiskSpaceSample], visibleHistoryHours: Int?) -> [DiskSpaceSample] {
+        let sortedSamples = samples.sorted { $0.sampledAt < $1.sampledAt }
         guard let visibleHistoryHours = DiskSpaceMonitorPreferences.clampedVisibleHistoryHours(visibleHistoryHours),
-              let latestDate = samples.map(\.sampledAt).max() else {
-            return samples
+              let latestDate = sortedSamples.last?.sampledAt else {
+            return sortedSamples
         }
 
         let cutoffDate = latestDate.addingTimeInterval(-Double(visibleHistoryHours) * 3_600)
-        return samples.filter { $0.sampledAt >= cutoffDate }
+        return sortedSamples.filter { $0.sampledAt >= cutoffDate }
     }
 }
 
@@ -206,18 +207,38 @@ public final class DiskSpaceSampleStore {
         return sample(from: statement)
     }
 
-    public func samples(since startDate: Date, limit: Int = 2_000) throws -> [DiskSpaceSample] {
-        let statement = try db.prepare(
-            """
-            SELECT sampled_at, available_bytes, total_bytes
-            FROM disk_space_samples
-            WHERE sampled_at >= ?
-            ORDER BY sampled_at ASC
-            LIMIT ?;
-            """
-        )
-        try statement.bind(startDate.timeIntervalSince1970, at: 1)
-        try statement.bind(limit, at: 2)
+    public func samples(since startDate: Date, limit: Int? = nil) throws -> [DiskSpaceSample] {
+        let statement: DiskSpaceSQLiteStatement
+        if let limit {
+            guard limit > 0 else {
+                return []
+            }
+            statement = try db.prepare(
+                """
+                SELECT sampled_at, available_bytes, total_bytes
+                FROM (
+                    SELECT sampled_at, available_bytes, total_bytes
+                    FROM disk_space_samples
+                    WHERE sampled_at >= ?
+                    ORDER BY sampled_at DESC
+                    LIMIT ?
+                )
+                ORDER BY sampled_at ASC;
+                """
+            )
+            try statement.bind(startDate.timeIntervalSince1970, at: 1)
+            try statement.bind(limit, at: 2)
+        } else {
+            statement = try db.prepare(
+                """
+                SELECT sampled_at, available_bytes, total_bytes
+                FROM disk_space_samples
+                WHERE sampled_at >= ?
+                ORDER BY sampled_at ASC;
+                """
+            )
+            try statement.bind(startDate.timeIntervalSince1970, at: 1)
+        }
 
         var samples: [DiskSpaceSample] = []
         while try statement.step() {

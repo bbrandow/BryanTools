@@ -624,6 +624,29 @@ private func testTrayCalTodayResetState() throws {
     )
 }
 
+private func testTrayCalPopoverResetAfterCloseThreshold() throws {
+    let openingDate = try trayCalDate(year: 2026, month: 5, day: 22)
+
+    try expect(
+        !TrayCalCalendar.shouldResetPopoverAfterClose(
+            closedAt: openingDate.addingTimeInterval(-119),
+            openingAt: openingDate
+        ),
+        "Expected TrayCal popover to preserve the displayed month before the two-minute close threshold"
+    )
+    try expect(
+        TrayCalCalendar.shouldResetPopoverAfterClose(
+            closedAt: openingDate.addingTimeInterval(-120),
+            openingAt: openingDate
+        ),
+        "Expected TrayCal popover to reset to today after being closed for two minutes"
+    )
+    try expect(
+        !TrayCalCalendar.shouldResetPopoverAfterClose(closedAt: nil, openingAt: openingDate),
+        "Expected TrayCal popover to preserve the displayed month when it has no close timestamp"
+    )
+}
+
 private func testTrayCalMonthAndYearJumpState() throws {
     let calendar = trayCalTestCalendar()
     var state = TrayCalCalendarState(
@@ -782,8 +805,10 @@ private func testDiskSpaceSampleStoreRetention() throws {
 
     try store.purgeOlderThan(now: now)
     let samples = try store.samples(since: now.addingTimeInterval(-30 * 24 * 60 * 60))
+    let limitedSamples = try store.samples(since: now.addingTimeInterval(-30 * 24 * 60 * 60), limit: 1)
 
     try expect(samples == [recentSample, latestSample], "Expected Disk Space Monitor to purge samples older than 30 days")
+    try expect(limitedSamples == [latestSample], "Expected limited Disk Space Monitor sample query to keep the latest samples")
 }
 
 private func testScreenOCRTextFormatterSortsAndTrimsLines() throws {
@@ -985,6 +1010,7 @@ private let tests: [(String, () throws -> Void)] = [
     ("TrayCal popup month name", testTrayCalPopupMonthNameFormatting),
     ("TrayCal May 2026 grid", testTrayCalMay2026MonthGrid),
     ("TrayCal today reset", testTrayCalTodayResetState),
+    ("TrayCal popover close reset", testTrayCalPopoverResetAfterCloseThreshold),
     ("TrayCal month/year jump", testTrayCalMonthAndYearJumpState),
     ("Disk Space display formatting", testDiskSpaceDisplayFormatting),
     ("Disk Space warning threshold", testDiskSpaceWarningThreshold),

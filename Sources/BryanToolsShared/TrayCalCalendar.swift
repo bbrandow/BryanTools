@@ -47,6 +47,8 @@ public struct TrayCalCalendarState: Equatable {
 }
 
 public enum TrayCalCalendar {
+    public static let popoverResetInterval: TimeInterval = 2 * 60
+
     public static func defaultCalendar(timeZone: TimeZone = .current) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "en_US_POSIX")
@@ -138,6 +140,17 @@ public enum TrayCalCalendar {
                 isToday: isInDisplayedMonth && calendar.isDate(calendar.startOfDay(for: date), inSameDayAs: normalizedToday)
             )
         }
+    }
+
+    public static func shouldResetPopoverAfterClose(
+        closedAt: Date?,
+        openingAt: Date,
+        resetInterval: TimeInterval = popoverResetInterval
+    ) -> Bool {
+        guard let closedAt else {
+            return false
+        }
+        return openingAt.timeIntervalSince(closedAt) >= resetInterval
     }
 
     private static func formatted(_ date: Date, format: String, calendar: Calendar) -> String {

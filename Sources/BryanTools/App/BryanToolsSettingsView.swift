@@ -182,6 +182,33 @@ struct BryanToolsSettingsView: View {
                 }
 
                 settingsSection("Application") {
+                    compactRow("Source") {
+                        HStack(spacing: 8) {
+                            Text(updater.sourceRootPath)
+                                .font(.system(.caption, design: .monospaced))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+
+                            Button {
+                                updater.chooseSourceRoot()
+                            } label: {
+                                Label("Choose", systemImage: "folder")
+                            }
+                            .labelStyle(.iconOnly)
+                            .help("Choose BryanTools source folder")
+
+                            Button {
+                                updater.resetSourceRoot()
+                            } label: {
+                                Label("Reset", systemImage: "arrow.counterclockwise")
+                            }
+                            .labelStyle(.iconOnly)
+                            .help("Reset updater source folder")
+                        }
+                    }
+
                     compactRow("Updater") {
                         Button {
                             updater.runUpdate()

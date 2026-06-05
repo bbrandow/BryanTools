@@ -539,6 +539,62 @@ private func testMouseMacroCommandParser() throws {
     )
 }
 
+private func testBryanToolsUpdateScriptResolver() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("BryanToolsUpdater-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let codeSourceRoot = root.appendingPathComponent("code/BryanTools", isDirectory: true)
+    let configuredSourceRoot = root.appendingPathComponent("custom/BryanTools", isDirectory: true)
+    for sourceRoot in [codeSourceRoot, configuredSourceRoot] {
+        let scriptsDirectory = sourceRoot.appendingPathComponent("Scripts", isDirectory: true)
+        try FileManager.default.createDirectory(at: scriptsDirectory, withIntermediateDirectories: true)
+        try Data("#!/usr/bin/env bash\n".utf8).write(to: scriptsDirectory.appendingPathComponent("update.sh"))
+    }
+
+    let defaultResolution = try require(
+        BryanToolsUpdateScriptResolver.resolve(homeDirectory: root, bundleURL: nil),
+        "Expected Bryan Tools updater to resolve source from home candidates"
+    )
+    try expect(
+        defaultResolution.sourceRoot.standardizedFileURL == codeSourceRoot.standardizedFileURL,
+        "Expected Bryan Tools updater to prefer ~/code/BryanTools"
+    )
+
+    let configuredResolution = try require(
+        BryanToolsUpdateScriptResolver.resolve(
+            configuredSourceRoot: configuredSourceRoot,
+            homeDirectory: root,
+            bundleURL: nil
+        ),
+        "Expected Bryan Tools updater to resolve configured source root"
+    )
+    try expect(
+        configuredResolution.sourceRoot.standardizedFileURL == configuredSourceRoot.standardizedFileURL,
+        "Expected Bryan Tools updater to prefer configured source root"
+    )
+
+    let buildSourceRoot = root.appendingPathComponent("buildSource/BryanTools", isDirectory: true)
+    let buildScriptsDirectory = buildSourceRoot.appendingPathComponent("Scripts", isDirectory: true)
+    try FileManager.default.createDirectory(at: buildScriptsDirectory, withIntermediateDirectories: true)
+    try Data("#!/usr/bin/env bash\n".utf8).write(to: buildScriptsDirectory.appendingPathComponent("update.sh"))
+
+    let buildBundleURL = buildSourceRoot
+        .appendingPathComponent(".build", isDirectory: true)
+        .appendingPathComponent("Bryan Tools.app", isDirectory: true)
+    let buildResolution = try require(
+        BryanToolsUpdateScriptResolver.resolve(
+            homeDirectory: root.appendingPathComponent("emptyHome", isDirectory: true),
+            bundleURL: buildBundleURL
+        ),
+        "Expected Bryan Tools updater to resolve source root for a .build app bundle"
+    )
+    try expect(
+        buildResolution.sourceRoot.standardizedFileURL == buildSourceRoot.standardizedFileURL,
+        "Expected Bryan Tools updater to resolve the source root from a .build app bundle"
+    )
+}
+
 private func testShotFloatDefaultHotKey() throws {
     try expect(
         AppHotKey.defaultShotFloatValue.displayString == "Command-Shift-2",
@@ -1003,6 +1059,7 @@ private let tests: [(String, () throws -> Void)] = [
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
     ("QuickTask command line prefix", testQuickTaskCommandLinePrefix),
     ("MouseMacro command parser", testMouseMacroCommandParser),
+    ("Bryan Tools update script resolver", testBryanToolsUpdateScriptResolver),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
     ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),
     ("TrayCal tool identifier", testTrayCalToolIdentifier),

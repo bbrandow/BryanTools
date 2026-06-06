@@ -135,17 +135,25 @@ struct TrayCalPopoverView: View {
     }
 
     private func dayCell(_ cell: TrayCalDayCell) -> some View {
-        Text("\(cell.day)")
-            .font(.system(size: 16, weight: cell.isToday ? .semibold : .regular))
-            .foregroundStyle(cell.isInDisplayedMonth ? Color.primary : Color.secondary.opacity(0.45))
-            .frame(width: 27, height: 22)
-            .overlay {
-                if cell.isToday {
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(Color.accentColor, lineWidth: 2)
-                        .frame(width: 24, height: 22)
+        VStack(spacing: 0) {
+            Text("\(cell.day)")
+                .font(.system(size: 16, weight: cell.isToday ? .semibold : .regular))
+                .foregroundStyle(cell.isInDisplayedMonth ? Color.primary : Color.secondary.opacity(0.45))
+                .frame(width: 27, height: 20)
+                .overlay {
+                    if cell.isToday {
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                            .frame(width: 24, height: 20)
+                    }
                 }
-            }
+
+            Circle()
+                .fill(Color.green)
+                .frame(width: 4, height: 4)
+                .opacity(cell.isPayday ? (cell.isInDisplayedMonth ? 1 : 0.45) : 0)
+        }
+        .frame(width: 27, height: 25)
     }
 
     private func headerPickerButton(_ title: String, action: @escaping () -> Void) -> some View {

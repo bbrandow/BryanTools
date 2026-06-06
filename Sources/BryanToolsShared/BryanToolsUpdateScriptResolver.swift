@@ -21,15 +21,42 @@ public enum BryanToolsUpdateScriptResolver {
         )
         .lazy
         .compactMap { sourceRoot in
-            let scriptURL = sourceRoot.appendingPathComponent("Scripts/update.sh")
-            var isDirectory: ObjCBool = false
-            guard fileManager.fileExists(atPath: scriptURL.path, isDirectory: &isDirectory),
-                  !isDirectory.boolValue else {
+            guard validateSourceRoot(sourceRoot, fileManager: fileManager) == nil else {
                 return nil
             }
+            let scriptURL = sourceRoot.appendingPathComponent("Scripts/update.sh")
             return BryanToolsUpdateScriptResolution(sourceRoot: sourceRoot, scriptURL: scriptURL)
         }
         .first
+    }
+
+    public static func validateSourceRoot(_ sourceRoot: URL, fileManager: FileManager = .default) -> String? {
+        let scriptURL = sourceRoot.appendingPathComponent("Scripts/update.sh")
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: scriptURL.path, isDirectory: &isDirectory),
+              !isDirectory.boolValue else {
+            return "Selected folder does not contain Scripts/update.sh."
+        }
+
+        let packageURL = sourceRoot.appendingPathComponent("Package.swift")
+        guard fileManager.fileExists(atPath: packageURL.path, isDirectory: &isDirectory),
+              !isDirectory.boolValue else {
+            return "Selected folder does not contain Package.swift."
+        }
+
+        guard let packageText = try? String(contentsOf: packageURL, encoding: .utf8),
+              packageText.contains("name: \"BryanTools\""),
+              packageText.contains("executable(name: \"BryanTools\"") else {
+            return "Selected Package.swift is not the BryanTools package."
+        }
+
+        let appEntryURL = sourceRoot.appendingPathComponent("Sources/BryanTools/App/BryanToolsApp.swift")
+        guard fileManager.fileExists(atPath: appEntryURL.path, isDirectory: &isDirectory),
+              !isDirectory.boolValue else {
+            return "Selected folder does not contain the BryanTools app source."
+        }
+
+        return nil
     }
 
     public static func candidateSourceRoots(

@@ -87,7 +87,7 @@ struct HistoryView: View {
                         ForEach(environment.searchResults) { record in
                             HistoryRow(
                                 record: record,
-                                thumbnailURL: environment.thumbnailURL(for: record),
+                                thumbnailImage: environment.thumbnailImage(for: record),
                                 isSelected: record.id == selectedID,
                                 canFloatImage: environment.canFloatImage(record)
                             ) {
@@ -221,7 +221,7 @@ struct HistoryView: View {
 
 private struct HistoryRow: View {
     let record: ClipRecord
-    let thumbnailURL: URL?
+    let thumbnailImage: NSImage?
     let isSelected: Bool
     let canFloatImage: Bool
     let floatImage: () -> Void
@@ -231,7 +231,7 @@ private struct HistoryRow: View {
     @State private var showingImagePreview = false
 
     private var previewSize: CGFloat {
-        thumbnailURL == nil ? 48 : 96
+        thumbnailImage == nil ? 48 : 96
     }
 
     private var hexColor: NSColor? {
@@ -291,8 +291,7 @@ private struct HistoryRow: View {
 
     @ViewBuilder
     private var preview: some View {
-        if let thumbnailURL,
-           let image = NSImage(contentsOf: thumbnailURL) {
+        if let image = thumbnailImage {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()

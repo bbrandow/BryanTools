@@ -16,8 +16,16 @@ public final class ClipStore {
     private let maxRepresentationBytes: Int
     private let maxEventBytes: Int
     private let retentionDays: Int
+    private let cipher: ClipStoreCipher
     private let jsonEncoder = JSONEncoder()
     private let jsonDecoder = JSONDecoder()
+
+    private struct RawClipRow {
+        let id: UUID
+        let summary: String
+        let searchableText: String
+        let typeIdentifiers: String
+    }
 
     public convenience init() throws {
         try self.init(rootDirectory: Self.defaultRootDirectory())
@@ -27,7 +35,8 @@ public final class ClipStore {
         rootDirectory: URL,
         maxRepresentationBytes: Int = ClipStore.defaultMaxRepresentationBytes,
         maxEventBytes: Int = ClipStore.defaultMaxEventBytes,
-        retentionDays: Int = ClipStore.defaultRetentionDays
+        retentionDays: Int = ClipStore.defaultRetentionDays,
+        encryptionKeyData: Data? = nil
     ) throws {
         self.rootDirectory = rootDirectory
         self.databaseURL = rootDirectory.appendingPathComponent("ClipMan.sqlite")
@@ -35,13 +44,16 @@ public final class ClipStore {
         self.maxRepresentationBytes = maxRepresentationBytes
         self.maxEventBytes = maxEventBytes
         self.retentionDays = retentionDays
+        self.cipher = try ClipStoreCipher(keyData: encryptionKeyData ?? ClipStoreKeychain.loadOrCreateKey())
 
         try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: blobDirectory, withIntermediateDirectories: true)
 
         self.db = try SQLiteDatabase(url: databaseURL)
         try migrate()
+        try encryptExistingStoredContent()
         try purgeExpired()
+        try removeOrphanedBlobDirectories()
     }
 
     public static func defaultRootDirectory(fileManager: FileManager = .default) throws -> URL {
@@ -80,7 +92,7 @@ public final class ClipStore {
             let fileName = representationFileName(index: index, typeIdentifier: representation.typeIdentifier)
             let relativePath = "Blobs/\(id.uuidString)/\(fileName)"
             let url = urlForRelativePath(relativePath)
-            try representation.data.write(to: url, options: .atomic)
+            try cipher.encryptData(representation.data).write(to: url, options: .atomic)
             storedRepresentations.append(
                 ClipRepresentation(
                     itemIndex: representation.itemIndex,
@@ -94,7 +106,7 @@ public final class ClipStore {
         let thumbnailPath: String?
         if let thumbnailPNGData = captured.thumbnailPNGData {
             let relativePath = "Blobs/\(id.uuidString)/thumbnail.png"
-            try thumbnailPNGData.write(to: urlForRelativePath(relativePath), options: .atomic)
+            try cipher.encryptData(thumbnailPNGData).write(to: urlForRelativePath(relativePath), options: .atomic)
             thumbnailPath = relativePath
         } else {
             thumbnailPath = nil
@@ -148,30 +160,25 @@ public final class ClipStore {
             )
         }
 
-        let ftsQuery = Self.ftsQuery(from: trimmed)
-        if !ftsQuery.isEmpty {
-            do {
-                return try records(
-                    sql: """
-                    SELECT c.id, c.created_at, c.item_count, c.content_hash, c.primary_kind, c.summary,
-                           c.searchable_text, c.type_identifiers, c.byte_count, c.thumbnail_path
-                    FROM clip_search s
-                    JOIN clips c ON c.id = s.clip_id
-                    WHERE clip_search MATCH ?
-                    ORDER BY c.created_at DESC
-                    LIMIT ?;
-                    """,
-                    bindings: { statement in
-                        try statement.bind(ftsQuery, at: 1)
-                        try statement.bind(limit, at: 2)
-                    }
-                )
-            } catch {
-                return try likeSearch(trimmed, limit: limit)
-            }
+        let terms = Self.searchTerms(from: trimmed)
+        guard !terms.isEmpty else {
+            return []
         }
 
-        return try likeSearch(trimmed, limit: limit)
+        return try records(
+            sql: """
+            SELECT id, created_at, item_count, content_hash, primary_kind, summary,
+                   searchable_text, type_identifiers, byte_count, thumbnail_path
+            FROM clips
+            ORDER BY created_at DESC;
+            """,
+            bindings: { _ in }
+        )
+        .filter { record in
+            Self.record(record, matchesTerms: terms)
+        }
+        .prefix(limit)
+        .map { $0 }
     }
 
     public func record(id: UUID) throws -> ClipRecord? {
@@ -193,12 +200,15 @@ public final class ClipStore {
         let statement = try db.prepare("DELETE FROM clips WHERE id = ?;")
         try statement.bind(id, at: 1)
         try statement.run()
-        try? FileManager.default.removeItem(at: blobDirectory.appendingPathComponent(id.uuidString, isDirectory: true))
+        try removeBlobDirectoryIfPresent(id: id)
+        try removeOrphanedBlobDirectories()
     }
 
     public func clearHistory() throws {
         try db.exec("DELETE FROM clips;")
-        try? FileManager.default.removeItem(at: blobDirectory)
+        if FileManager.default.fileExists(atPath: blobDirectory.path) {
+            try FileManager.default.removeItem(at: blobDirectory)
+        }
         try FileManager.default.createDirectory(at: blobDirectory, withIntermediateDirectories: true)
     }
 
@@ -210,6 +220,7 @@ public final class ClipStore {
     public func purge(olderThan cutoff: Date) throws {
         let ids = try idsOlderThan(cutoff)
         guard !ids.isEmpty else {
+            try removeOrphanedBlobDirectories()
             return
         }
 
@@ -225,8 +236,9 @@ public final class ClipStore {
         }
 
         for id in ids {
-            try? FileManager.default.removeItem(at: blobDirectory.appendingPathComponent(id.uuidString, isDirectory: true))
+            try removeBlobDirectoryIfPresent(id: id)
         }
+        try removeOrphanedBlobDirectories()
     }
 
     public func restoreClip(id: UUID, to pasteboard: NSPasteboard = .general) throws {
@@ -246,7 +258,7 @@ public final class ClipStore {
             let item = NSPasteboardItem()
             for representation in grouped[itemIndex, default: []] {
                 let url = urlForRelativePath(representation.storagePath)
-                guard let data = try? Data(contentsOf: url) else {
+                guard let data = try? dataForStoredFile(at: url) else {
                     continue
                 }
                 item.setData(data, forType: NSPasteboard.PasteboardType(representation.typeIdentifier))
@@ -283,7 +295,7 @@ public final class ClipStore {
         let minimumUsefulDimension = PasteboardArchiver.storedThumbnailMaxDimension * 0.75
         if let thumbnailPath = record.thumbnailPath {
             let existingURL = urlForRelativePath(thumbnailPath)
-            if Self.maxImagePixelDimension(at: existingURL) >= minimumUsefulDimension {
+            if try maxImagePixelDimension(at: existingURL) >= minimumUsefulDimension {
                 return existingURL
             }
         }
@@ -299,7 +311,7 @@ public final class ClipStore {
             at: thumbnailURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try thumbnailData.write(to: thumbnailURL, options: .atomic)
+        try cipher.encryptData(thumbnailData).write(to: thumbnailURL, options: .atomic)
 
         if record.thumbnailPath == nil {
             try updateThumbnailPath(id: record.id, relativePath: relativePath)
@@ -315,7 +327,34 @@ public final class ClipStore {
         guard let thumbnailPath = record.thumbnailPath else {
             return nil
         }
-        return NSImage(contentsOf: urlForRelativePath(thumbnailPath))
+        return try imageForStoredFile(at: urlForRelativePath(thumbnailPath))
+    }
+
+    public func thumbnailImage(for record: ClipRecord) throws -> NSImage? {
+        guard let thumbnailURL = try ensureHighResolutionThumbnail(for: record) else {
+            return nil
+        }
+        return try imageForStoredFile(at: thumbnailURL)
+    }
+
+    public func removeOrphanedBlobDirectories() throws {
+        try FileManager.default.createDirectory(at: blobDirectory, withIntermediateDirectories: true)
+        let knownIDs = try allClipIDs()
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: blobDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        for url in contents {
+            let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+            guard values.isDirectory == true,
+                  let id = UUID(uuidString: url.lastPathComponent),
+                  !knownIDs.contains(id) else {
+                continue
+            }
+            try FileManager.default.removeItem(at: url)
+        }
     }
 
     private func migrate() throws {
@@ -372,6 +411,83 @@ public final class ClipStore {
         )
     }
 
+    private func encryptExistingStoredContent() throws {
+        let rows = try rawClipRows()
+        guard !rows.isEmpty else {
+            return
+        }
+
+        var didUpdateMetadata = false
+        try db.exec("BEGIN IMMEDIATE TRANSACTION;")
+        do {
+            for row in rows {
+                let encryptedSummary = try encryptedTextIfNeeded(row.summary)
+                let encryptedSearchableText = try encryptedTextIfNeeded(row.searchableText)
+                let encryptedTypeIdentifiers = try encryptedTextIfNeeded(row.typeIdentifiers)
+                guard encryptedSummary != row.summary
+                    || encryptedSearchableText != row.searchableText
+                    || encryptedTypeIdentifiers != row.typeIdentifiers else {
+                    continue
+                }
+
+                let statement = try db.prepare(
+                    """
+                    UPDATE clips
+                    SET summary = ?, searchable_text = ?, type_identifiers = ?
+                    WHERE id = ?;
+                    """
+                )
+                try statement.bind(encryptedSummary, at: 1)
+                try statement.bind(encryptedSearchableText, at: 2)
+                try statement.bind(encryptedTypeIdentifiers, at: 3)
+                try statement.bind(row.id, at: 4)
+                try statement.run()
+                didUpdateMetadata = true
+            }
+            try db.exec("COMMIT;")
+        } catch {
+            try? db.exec("ROLLBACK;")
+            throw error
+        }
+
+        if didUpdateMetadata {
+            try rebuildSearchIndex()
+        }
+
+        try encryptExistingBlobFiles()
+    }
+
+    private func encryptedTextIfNeeded(_ text: String) throws -> String {
+        let decryptedText = try cipher.decryptTextIfNeeded(text)
+        return try cipher.encryptText(decryptedText)
+    }
+
+    private func encryptExistingBlobFiles() throws {
+        let paths = try storedBlobRelativePaths()
+        for path in paths {
+            let url = urlForRelativePath(path)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                continue
+            }
+            let data = try Data(contentsOf: url)
+            guard !cipher.isEncryptedData(data) else {
+                continue
+            }
+            try cipher.encryptData(data).write(to: url, options: .atomic)
+        }
+    }
+
+    private func rebuildSearchIndex() throws {
+        try db.exec(
+            """
+            DELETE FROM clip_search;
+            INSERT INTO clip_search(clip_id, body)
+            SELECT id, summary || ' ' || searchable_text || ' ' || type_identifiers
+            FROM clips;
+            """
+        )
+    }
+
     private func insertRecord(_ record: ClipRecord, typeIdentifiersJSON: String) throws {
         let statement = try db.prepare(
             """
@@ -387,9 +503,9 @@ public final class ClipStore {
         try statement.bind(record.itemCount, at: 3)
         try statement.bind(record.contentHash, at: 4)
         try statement.bind(record.primaryKind.rawValue, at: 5)
-        try statement.bind(record.summary, at: 6)
-        try statement.bind(record.searchableText, at: 7)
-        try statement.bind(typeIdentifiersJSON, at: 8)
+        try statement.bind(cipher.encryptText(record.summary), at: 6)
+        try statement.bind(cipher.encryptText(record.searchableText), at: 7)
+        try statement.bind(cipher.encryptText(typeIdentifiersJSON), at: 8)
         try statement.bind(record.byteCount, at: 9)
         try statement.bind(record.thumbnailPath, at: 10)
         try statement.run()
@@ -435,17 +551,50 @@ public final class ClipStore {
         return records
     }
 
+    private func rawClipRows() throws -> [RawClipRow] {
+        let statement = try db.prepare(
+            """
+            SELECT id, summary, searchable_text, type_identifiers
+            FROM clips;
+            """
+        )
+
+        var rows: [RawClipRow] = []
+        while try statement.step() {
+            guard let idString = statement.columnString(0),
+                  let id = UUID(uuidString: idString),
+                  let summary = statement.columnString(1),
+                  let searchableText = statement.columnString(2),
+                  let typeIdentifiers = statement.columnString(3) else {
+                continue
+            }
+            rows.append(
+                RawClipRow(
+                    id: id,
+                    summary: summary,
+                    searchableText: searchableText,
+                    typeIdentifiers: typeIdentifiers
+                )
+            )
+        }
+        return rows
+    }
+
     private func record(from statement: SQLiteStatement) throws -> ClipRecord {
         guard let idString = statement.columnString(0),
               let id = UUID(uuidString: idString),
               let contentHash = statement.columnString(3),
               let kindString = statement.columnString(4),
               let primaryKind = ClipPrimaryKind(rawValue: kindString),
-              let summary = statement.columnString(5),
-              let searchableText = statement.columnString(6),
-              let typeIdentifiersJSON = statement.columnString(7) else {
+              let rawSummary = statement.columnString(5),
+              let rawSearchableText = statement.columnString(6),
+              let rawTypeIdentifiersJSON = statement.columnString(7) else {
             throw ClipboardHistoryError.database("Unable to decode clip row.")
         }
+
+        let summary = try cipher.decryptTextIfNeeded(rawSummary)
+        let searchableText = try cipher.decryptTextIfNeeded(rawSearchableText)
+        let typeIdentifiersJSON = try cipher.decryptTextIfNeeded(rawTypeIdentifiersJSON)
 
         return ClipRecord(
             id: id,
@@ -490,13 +639,63 @@ public final class ClipStore {
         return representations
     }
 
+    private func storedBlobRelativePaths() throws -> Set<String> {
+        var paths = Set<String>()
+
+        let representationStatement = try db.prepare("SELECT storage_path FROM representations;")
+        while try representationStatement.step() {
+            if let path = representationStatement.columnString(0) {
+                paths.insert(path)
+            }
+        }
+
+        let thumbnailStatement = try db.prepare("SELECT thumbnail_path FROM clips WHERE thumbnail_path IS NOT NULL;")
+        while try thumbnailStatement.step() {
+            if let path = thumbnailStatement.columnString(0) {
+                paths.insert(path)
+            }
+        }
+
+        return paths
+    }
+
+    private func allClipIDs() throws -> Set<UUID> {
+        let statement = try db.prepare("SELECT id FROM clips;")
+        var ids = Set<UUID>()
+        while try statement.step() {
+            if let idString = statement.columnString(0),
+               let id = UUID(uuidString: idString) {
+                ids.insert(id)
+            }
+        }
+        return ids
+    }
+
+    private func removeBlobDirectoryIfPresent(id: UUID) throws {
+        let url = blobDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
+        try FileManager.default.removeItem(at: url)
+    }
+
+    private func dataForStoredFile(at url: URL) throws -> Data {
+        try cipher.decryptDataIfNeeded(Data(contentsOf: url))
+    }
+
+    private func imageForStoredFile(at url: URL) throws -> NSImage? {
+        let data = try dataForStoredFile(at: url)
+        let image = NSImage(data: data)
+        return image?.isValid == true ? image : nil
+    }
+
     private func firstImageRepresentation(for clipID: UUID) throws -> NSImage? {
         for representation in try representations(for: clipID) {
             guard isImageTypeIdentifier(representation.typeIdentifier) else {
                 continue
             }
             let url = urlForRelativePath(representation.storagePath)
-            guard let data = try? Data(contentsOf: url),
+            guard let data = try? dataForStoredFile(at: url),
                   let image = NSImage(data: data),
                   image.isValid else {
                 continue
@@ -517,32 +716,12 @@ public final class ClipStore {
             || normalized == "public.tiff"
     }
 
-    private static func maxImagePixelDimension(at url: URL) -> CGFloat {
-        guard let data = try? Data(contentsOf: url),
-              let bitmap = NSBitmapImageRep(data: data) else {
+    private func maxImagePixelDimension(at url: URL) throws -> CGFloat {
+        let data = try dataForStoredFile(at: url)
+        guard let bitmap = NSBitmapImageRep(data: data) else {
             return 0
         }
         return CGFloat(max(bitmap.pixelsWide, bitmap.pixelsHigh))
-    }
-
-    private func likeSearch(_ query: String, limit: Int) throws -> [ClipRecord] {
-        let pattern = "%\(query)%"
-        return try records(
-            sql: """
-            SELECT id, created_at, item_count, content_hash, primary_kind, summary,
-                   searchable_text, type_identifiers, byte_count, thumbnail_path
-            FROM clips
-            WHERE searchable_text LIKE ? OR summary LIKE ? OR type_identifiers LIKE ?
-            ORDER BY created_at DESC
-            LIMIT ?;
-            """,
-            bindings: { statement in
-                try statement.bind(pattern, at: 1)
-                try statement.bind(pattern, at: 2)
-                try statement.bind(pattern, at: 3)
-                try statement.bind(limit, at: 4)
-            }
-        )
     }
 
     private func record(contentHash: String) throws -> ClipRecord? {
@@ -610,11 +789,19 @@ public final class ClipStore {
         return try jsonDecoder.decode([String].self, from: data)
     }
 
-    private static func ftsQuery(from query: String) -> String {
-        let terms = query
+    private static func searchTerms(from query: String) -> [String] {
+        query
             .lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
-        return terms.map { "\($0)*" }.joined(separator: " AND ")
+    }
+
+    private static func record(_ record: ClipRecord, matchesTerms terms: [String]) -> Bool {
+        let searchableContent = (
+            record.summary + " " +
+                record.searchableText + " " +
+                record.typeIdentifiers.joined(separator: " ")
+        ).lowercased()
+        return terms.allSatisfy { searchableContent.contains($0) }
     }
 }

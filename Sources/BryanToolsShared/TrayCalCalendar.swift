@@ -5,16 +5,16 @@ public struct TrayCalDayCell: Equatable, Identifiable {
     public let day: Int
     public let isInDisplayedMonth: Bool
     public let isToday: Bool
+    public let isPayday: Bool
 
-    public var id: Date {
-        date
-    }
+    public var id: Date { date }
 
-    public init(date: Date, day: Int, isInDisplayedMonth: Bool, isToday: Bool) {
+    public init(date: Date, day: Int, isInDisplayedMonth: Bool, isToday: Bool, isPayday: Bool = false) {
         self.date = date
         self.day = day
         self.isInDisplayedMonth = isInDisplayedMonth
         self.isToday = isToday
+        self.isPayday = isPayday
     }
 }
 
@@ -137,9 +137,29 @@ public enum TrayCalCalendar {
                 date: date,
                 day: calendar.component(.day, from: date),
                 isInDisplayedMonth: isInDisplayedMonth,
-                isToday: isInDisplayedMonth && calendar.isDate(calendar.startOfDay(for: date), inSameDayAs: normalizedToday)
+                isToday: isInDisplayedMonth && calendar.isDate(calendar.startOfDay(for: date), inSameDayAs: normalizedToday),
+                isPayday: isPayday(date, calendar: calendar)
             )
         }
+    }
+
+    public static func isPayday(_ date: Date, calendar: Calendar = defaultCalendar()) -> Bool {
+        guard let anchorPayday = calendar.date(from: DateComponents(
+            calendar: calendar,
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 5,
+            day: 29
+        )) else {
+            return false
+        }
+
+        let dayDifference = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: anchorPayday),
+            to: calendar.startOfDay(for: date)
+        ).day ?? 0
+        return dayDifference % 14 == 0
     }
 
     public static func shouldResetPopoverAfterClose(

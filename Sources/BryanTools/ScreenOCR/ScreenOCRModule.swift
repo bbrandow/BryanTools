@@ -29,6 +29,8 @@ final class ScreenOCRModule: ObservableObject, ToolModule {
     private var isRunning = false
     private var appToRestoreFocus: NSRunningApplication?
     private var textOutputHandler: TextOutputHandler?
+    private var recognitionTask: Task<Void, Never>?
+    private var recognitionID = UUID()
 
     private init(preferences: ScreenOCRPreferences) {
         self.preferences = preferences
@@ -47,6 +49,10 @@ final class ScreenOCRModule: ObservableObject, ToolModule {
     func stop() {
         isRunning = false
         cancelCapture(restoreFocus: false)
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionID = UUID()
+        isRecognizing = false
         hotKeyController.unregisterAll()
     }
 
@@ -138,12 +144,35 @@ final class ScreenOCRModule: ObservableObject, ToolModule {
 
     private func completeCapture(_ selection: ScreenRegionSelection) {
         cancelCapture(restoreFocus: true)
+        recognitionTask?.cancel()
+        let runID = UUID()
+        recognitionID = runID
         isRecognizing = true
         lastStatusMessage = "Recognizing text..."
         lastErrorMessage = nil
+        let image = selection.cgImage
+        let moduleReference = WeakScreenOCRModule(self)
+
+        recognitionTask = Task.detached(priority: .userInitiated) { [moduleReference, image, runID] in
+            let result = Result {
+                try ScreenOCRRecognizer.recognizeText(in: image)
+            }
+            let wasCancelled = Task.isCancelled
+
+            await MainActor.run {
+                moduleReference.value?.finishRecognition(result, runID: runID, wasCancelled: wasCancelled)
+            }
+        }
+    }
+
+    private func finishRecognition(_ result: Result<String, Error>, runID: UUID, wasCancelled: Bool) {
+        guard recognitionID == runID,
+              !wasCancelled else {
+            return
+        }
 
         do {
-            let text = try ScreenOCRRecognizer.recognizeText(in: selection.cgImage)
+            let text = try result.get()
             try copyRecognizedText(text)
             lastStatusMessage = "Copied recognized text to clipboard."
             lastErrorMessage = nil
@@ -153,6 +182,7 @@ final class ScreenOCRModule: ObservableObject, ToolModule {
         }
 
         isRecognizing = false
+        recognitionTask = nil
     }
 
     private func copyRecognizedText(_ text: String) throws {
@@ -200,5 +230,13 @@ final class ScreenOCRModule: ObservableObject, ToolModule {
         DispatchQueue.main.async {
             app.activate(options: [])
         }
+    }
+}
+
+private final class WeakScreenOCRModule: @unchecked Sendable {
+    weak var value: ScreenOCRModule?
+
+    init(_ value: ScreenOCRModule) {
+        self.value = value
     }
 }

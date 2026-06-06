@@ -29,7 +29,10 @@ private final class Fixture {
     init() throws {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("BryanToolsTests-\(UUID().uuidString)", isDirectory: true)
-        store = try ClipStore(rootDirectory: directory)
+        store = try ClipStore(
+            rootDirectory: directory,
+            encryptionKeyData: ClipStoreEncryptionKey.deterministicTestKey()
+        )
     }
 
     func cleanup() {
@@ -83,6 +86,29 @@ private func makePNGData(size: NSSize = NSSize(width: 2, height: 2)) throws -> D
     return png
 }
 
+private func storageContainsPlaintext(_ text: String, in directory: URL) throws -> Bool {
+    let needle = Data(text.utf8)
+    guard let enumerator = FileManager.default.enumerator(
+        at: directory,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+    ) else {
+        return false
+    }
+
+    for case let url as URL in enumerator {
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+        guard values.isRegularFile == true else {
+            continue
+        }
+        let data = try Data(contentsOf: url)
+        if data.range(of: needle) != nil {
+            return true
+        }
+    }
+    return false
+}
+
 private func testInsertSearchDeleteAndPurge() throws {
     let fixture = try Fixture()
     defer { fixture.cleanup() }
@@ -96,6 +122,51 @@ private func testInsertSearchDeleteAndPurge() throws {
 
     try fixture.store.deleteClip(id: record.id)
     try expect(try fixture.store.search().isEmpty, "Expected delete to remove record")
+}
+
+private func testClipboardStorageEncryptsSearchableContentAndRestores() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    let secretText = "sensitive-token-\(UUID().uuidString)"
+    let pasteboard = namedPasteboard()
+    try writeString(secretText, to: pasteboard)
+
+    let record = try require(try fixture.store.captureCurrentPasteboard(pasteboard), "Expected encrypted text record")
+    try expect(
+        try fixture.store.search(secretText).map(\.id) == [record.id],
+        "Expected encrypted records to remain searchable"
+    )
+    try expect(
+        try !storageContainsPlaintext(secretText, in: fixture.directory),
+        "Expected Clipboard History storage not to contain raw captured text"
+    )
+
+    let restorePasteboard = namedPasteboard()
+    try fixture.store.restoreClip(id: record.id, to: restorePasteboard)
+    try expect(
+        restorePasteboard.string(forType: .string) == secretText,
+        "Expected encrypted clipboard representation to restore original text"
+    )
+}
+
+private func testClipboardStorageRemovesOrphanedBlobDirectories() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    let pasteboard = namedPasteboard()
+    try writeString("orphan cleanup survivor", to: pasteboard)
+    let record = try require(try fixture.store.captureCurrentPasteboard(pasteboard), "Expected record before orphan cleanup")
+
+    let orphanID = UUID()
+    let orphanDirectory = fixture.store.blobDirectory.appendingPathComponent(orphanID.uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: orphanDirectory, withIntermediateDirectories: true)
+    try Data("orphan".utf8).write(to: orphanDirectory.appendingPathComponent("orphan.bin"))
+
+    try fixture.store.purgeExpired()
+
+    try expect(!FileManager.default.fileExists(atPath: orphanDirectory.path), "Expected orphaned blob directory to be removed")
+    try expect(try fixture.store.record(id: record.id) != nil, "Expected live clip to survive orphan cleanup")
 }
 
 private func testRetentionPurgeRemovesOldItems() throws {
@@ -217,8 +288,10 @@ private func testImageThumbnailUsesHighResolutionPreview() throws {
 
     let record = try require(try fixture.store.captureCurrentPasteboard(pasteboard), "Expected image record")
     let thumbnailPath = try require(record.thumbnailPath, "Expected image record to have a thumbnail")
-    let thumbnailData = try Data(contentsOf: fixture.store.urlForRelativePath(thumbnailPath))
-    let thumbnail = try require(NSBitmapImageRep(data: thumbnailData), "Expected thumbnail PNG to decode")
+    let rawThumbnailData = try Data(contentsOf: fixture.store.urlForRelativePath(thumbnailPath))
+    try expect(NSBitmapImageRep(data: rawThumbnailData) == nil, "Expected raw thumbnail file to be encrypted")
+    let thumbnailImage = try require(try fixture.store.thumbnailImage(for: record), "Expected thumbnail image to decode through store")
+    let thumbnail = try require(thumbnailImage.representations.first, "Expected thumbnail image to have a representation")
 
     try expect(
         max(thumbnail.pixelsWide, thumbnail.pixelsHigh) == Int(PasteboardArchiver.storedThumbnailMaxDimension),
@@ -539,6 +612,27 @@ private func testMouseMacroCommandParser() throws {
     )
 }
 
+private func createValidUpdaterSourceRoot(_ sourceRoot: URL) throws {
+    let scriptsDirectory = sourceRoot.appendingPathComponent("Scripts", isDirectory: true)
+    let appDirectory = sourceRoot.appendingPathComponent("Sources/BryanTools/App", isDirectory: true)
+    try FileManager.default.createDirectory(at: scriptsDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
+    try Data("#!/usr/bin/env bash\n".utf8).write(to: scriptsDirectory.appendingPathComponent("update.sh"))
+    try Data(
+        """
+        // swift-tools-version: 6.0
+        import PackageDescription
+        let package = Package(
+            name: "BryanTools",
+            products: [
+                .executable(name: "BryanTools", targets: ["BryanTools"])
+            ]
+        )
+        """.utf8
+    ).write(to: sourceRoot.appendingPathComponent("Package.swift"))
+    try Data("import SwiftUI\n".utf8).write(to: appDirectory.appendingPathComponent("BryanToolsApp.swift"))
+}
+
 private func testBryanToolsUpdateScriptResolver() throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("BryanToolsUpdater-\(UUID().uuidString)", isDirectory: true)
@@ -547,9 +641,7 @@ private func testBryanToolsUpdateScriptResolver() throws {
     let codeSourceRoot = root.appendingPathComponent("code/BryanTools", isDirectory: true)
     let configuredSourceRoot = root.appendingPathComponent("custom/BryanTools", isDirectory: true)
     for sourceRoot in [codeSourceRoot, configuredSourceRoot] {
-        let scriptsDirectory = sourceRoot.appendingPathComponent("Scripts", isDirectory: true)
-        try FileManager.default.createDirectory(at: scriptsDirectory, withIntermediateDirectories: true)
-        try Data("#!/usr/bin/env bash\n".utf8).write(to: scriptsDirectory.appendingPathComponent("update.sh"))
+        try createValidUpdaterSourceRoot(sourceRoot)
     }
 
     let defaultResolution = try require(
@@ -575,9 +667,7 @@ private func testBryanToolsUpdateScriptResolver() throws {
     )
 
     let buildSourceRoot = root.appendingPathComponent("buildSource/BryanTools", isDirectory: true)
-    let buildScriptsDirectory = buildSourceRoot.appendingPathComponent("Scripts", isDirectory: true)
-    try FileManager.default.createDirectory(at: buildScriptsDirectory, withIntermediateDirectories: true)
-    try Data("#!/usr/bin/env bash\n".utf8).write(to: buildScriptsDirectory.appendingPathComponent("update.sh"))
+    try createValidUpdaterSourceRoot(buildSourceRoot)
 
     let buildBundleURL = buildSourceRoot
         .appendingPathComponent(".build", isDirectory: true)
@@ -592,6 +682,20 @@ private func testBryanToolsUpdateScriptResolver() throws {
     try expect(
         buildResolution.sourceRoot.standardizedFileURL == buildSourceRoot.standardizedFileURL,
         "Expected Bryan Tools updater to resolve the source root from a .build app bundle"
+    )
+
+    let scriptOnlyRoot = root.appendingPathComponent("scriptOnly/BryanTools", isDirectory: true)
+    let scriptOnlyDirectory = scriptOnlyRoot.appendingPathComponent("Scripts", isDirectory: true)
+    try FileManager.default.createDirectory(at: scriptOnlyDirectory, withIntermediateDirectories: true)
+    try Data("#!/usr/bin/env bash\n".utf8).write(to: scriptOnlyDirectory.appendingPathComponent("update.sh"))
+
+    try expect(
+        BryanToolsUpdateScriptResolver.resolve(
+            configuredSourceRoot: scriptOnlyRoot,
+            homeDirectory: root.appendingPathComponent("emptyHome2", isDirectory: true),
+            bundleURL: nil
+        ) == nil,
+        "Expected updater resolver to reject a script-only source root"
     )
 }
 
@@ -662,6 +766,25 @@ private func testTrayCalMay2026MonthGrid() throws {
     try expect(grid[6].day == 2 && grid[6].isInDisplayedMonth, "Expected May 2 to land on Saturday")
     try expect(grid.last?.day == 6 && grid.last?.isInDisplayedMonth == false, "Expected May 2026 grid to end with Jun 6")
     try expect(grid.filter(\.isToday).map(\.day) == [22], "Expected May 22 to be highlighted as today")
+}
+
+private func testTrayCalPaydaySchedule() throws {
+    let calendar = trayCalTestCalendar()
+    let may = try trayCalDate(year: 2026, month: 5, day: 22)
+    let grid = TrayCalCalendar.monthGrid(displayedMonth: may, today: may, calendar: calendar)
+    let paydays = grid
+        .filter { $0.isInDisplayedMonth && $0.isPayday }
+        .map(\.day)
+
+    try expect(paydays == [1, 15, 29], "Expected TrayCal to flag every other Friday from the May 29, 2026 anchor")
+    try expect(
+        TrayCalCalendar.isPayday(try trayCalDate(year: 2026, month: 6, day: 12), calendar: calendar),
+        "Expected June 12, 2026 to be a payday"
+    )
+    try expect(
+        !TrayCalCalendar.isPayday(try trayCalDate(year: 2026, month: 6, day: 5), calendar: calendar),
+        "Expected June 5, 2026 not to be a payday"
+    )
 }
 
 private func testTrayCalTodayResetState() throws {
@@ -1032,6 +1155,8 @@ private func testMigrationFreshInstallWithoutLegacyData() throws {
 
 private let tests: [(String, () throws -> Void)] = [
     ("insert/search/delete/purge", testInsertSearchDeleteAndPurge),
+    ("clipboard storage encryption restore", testClipboardStorageEncryptsSearchableContentAndRestores),
+    ("clipboard orphan blob cleanup", testClipboardStorageRemovesOrphanedBlobDirectories),
     ("90-day retention purge", testRetentionPurgeRemovesOldItems),
     ("immediate duplicate refresh", testImmediateDuplicateRefreshesExistingRecord),
     ("duplicate copy moves existing record to top", testDuplicateCopyMovesExistingRecordToTop),
@@ -1066,6 +1191,7 @@ private let tests: [(String, () throws -> Void)] = [
     ("TrayCal status title", testTrayCalStatusTitleFormatting),
     ("TrayCal popup month name", testTrayCalPopupMonthNameFormatting),
     ("TrayCal May 2026 grid", testTrayCalMay2026MonthGrid),
+    ("TrayCal payday schedule", testTrayCalPaydaySchedule),
     ("TrayCal today reset", testTrayCalTodayResetState),
     ("TrayCal popover close reset", testTrayCalPopoverResetAfterCloseThreshold),
     ("TrayCal month/year jump", testTrayCalMonthAndYearJumpState),

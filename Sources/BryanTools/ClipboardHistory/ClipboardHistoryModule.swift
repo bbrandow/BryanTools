@@ -45,7 +45,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
     private var appToRestoreFocus: NSRunningApplication?
     private var searchClearWorkItem: DispatchWorkItem?
     private var searchClearToken: UUID?
-    private var thumbnailURLCache: [UUID: URL] = [:]
+    private var thumbnailImageCache: [UUID: NSImage] = [:]
     private var thumbnailMisses = Set<UUID>()
 
     private lazy var historyPanelController = HistoryPanelController(environment: self)
@@ -302,7 +302,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
     func delete(_ record: ClipRecord) {
         do {
             try store.deleteClip(id: record.id)
-            thumbnailURLCache.removeValue(forKey: record.id)
+            thumbnailImageCache.removeValue(forKey: record.id)
             thumbnailMisses.remove(record.id)
             refreshSearch()
         } catch {
@@ -313,7 +313,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
     func clearHistory() {
         do {
             try store.clearHistory()
-            thumbnailURLCache.removeAll()
+            thumbnailImageCache.removeAll()
             thumbnailMisses.removeAll()
             refreshSearch()
         } catch {
@@ -377,28 +377,23 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         }
     }
 
-    func thumbnailURL(for record: ClipRecord) -> URL? {
-        if let cachedURL = thumbnailURLCache[record.id] {
-            return cachedURL
+    func thumbnailImage(for record: ClipRecord) -> NSImage? {
+        if let cachedImage = thumbnailImageCache[record.id] {
+            return cachedImage
         }
         if thumbnailMisses.contains(record.id) {
             return nil
         }
 
         do {
-            if let thumbnailURL = try store.ensureHighResolutionThumbnail(for: record) {
-                thumbnailURLCache[record.id] = thumbnailURL
-                return thumbnailURL
+            if let image = try store.thumbnailImage(for: record) {
+                thumbnailImageCache[record.id] = image
+                return image
             }
             thumbnailMisses.insert(record.id)
             return nil
         } catch {
             lastErrorMessage = error.localizedDescription
-            if let thumbnailPath = record.thumbnailPath {
-                let fallbackURL = store.urlForRelativePath(thumbnailPath)
-                thumbnailURLCache[record.id] = fallbackURL
-                return fallbackURL
-            }
             thumbnailMisses.insert(record.id)
             return nil
         }
@@ -486,7 +481,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         monitor?.stop()
         monitor = nil
         store = newStore
-        thumbnailURLCache.removeAll()
+        thumbnailImageCache.removeAll()
         thumbnailMisses.removeAll()
         if shouldRestartMonitor {
             startMonitor()
@@ -556,7 +551,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
 
     private func pruneThumbnailCache(to records: [ClipRecord]) {
         let ids = Set(records.map(\.id))
-        thumbnailURLCache = thumbnailURLCache.filter { ids.contains($0.key) }
+        thumbnailImageCache = thumbnailImageCache.filter { ids.contains($0.key) }
         thumbnailMisses = thumbnailMisses.intersection(ids)
     }
 

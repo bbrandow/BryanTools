@@ -108,11 +108,8 @@ final class BryanToolsUpdater: ObservableObject {
 
     func updateSourceRoot(_ url: URL) {
         let standardizedURL = url.standardizedFileURL
-        let scriptURL = standardizedURL.appendingPathComponent("Scripts/update.sh")
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: scriptURL.path, isDirectory: &isDirectory),
-              !isDirectory.boolValue else {
-            lastErrorMessage = "Selected folder does not contain Scripts/update.sh."
+        if let validationError = BryanToolsUpdateScriptResolver.validateSourceRoot(standardizedURL) {
+            lastErrorMessage = validationError
             return
         }
 

@@ -22,6 +22,7 @@ let package = Package(
             name: "ClipboardHistoryCore",
             dependencies: ["BryanToolsShared"],
             linkerSettings: [
+                .linkedFramework("Security"),
                 .linkedLibrary("sqlite3")
             ]
         ),

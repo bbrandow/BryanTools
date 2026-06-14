@@ -14,6 +14,7 @@ struct BryanToolsSettingsView: View {
     @ObservedObject private var screenOCR: ScreenOCRModule
     @ObservedObject private var diskSpaceMonitor: DiskSpaceMonitorModule
     @ObservedObject private var updater: BryanToolsUpdater
+    @ObservedObject private var autoStart: BryanToolsAutoStartController
 
     @State private var recordingHotKey: SettingsHotKeyTarget?
     @State private var diskWarningText = ""
@@ -29,6 +30,7 @@ struct BryanToolsSettingsView: View {
         self.screenOCR = environment.screenOCR
         self.diskSpaceMonitor = environment.diskSpaceMonitor
         self.updater = environment.updater
+        self.autoStart = environment.autoStart
     }
 
     var body: some View {
@@ -182,6 +184,11 @@ struct BryanToolsSettingsView: View {
                 }
 
                 settingsSection("Application") {
+                    compactRow("Auto Start") {
+                        Toggle("Start Bryan Tools on login", isOn: autoStartEnabledBinding)
+                            .toggleStyle(.checkbox)
+                    }
+
                     compactRow("Source") {
                         HStack(spacing: 8) {
                             Text(updater.sourceRootPath)
@@ -290,6 +297,7 @@ struct BryanToolsSettingsView: View {
             prefixedError("ShotFloat", shotFloat.lastErrorMessage),
             prefixedError("Screen OCR", screenOCR.lastErrorMessage),
             prefixedError("Disk Space", diskSpaceMonitor.lastErrorMessage),
+            prefixedError("Auto Start", autoStart.lastErrorMessage),
             prefixedError("Updater", updater.lastErrorMessage)
         ].compactMap { $0 }
     }
@@ -322,6 +330,13 @@ struct BryanToolsSettingsView: View {
                 diskSpaceMonitor.updateWarningThresholdGB(value)
                 syncDiskWarningText()
             }
+        )
+    }
+
+    private var autoStartEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { autoStart.isEnabled },
+            set: { autoStart.updateEnabled($0) }
         )
     }
 

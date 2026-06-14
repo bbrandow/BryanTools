@@ -16,6 +16,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let trayCal: TrayCalModule
     let diskSpaceMonitor: DiskSpaceMonitorModule
     let updater: BryanToolsUpdater
+    let autoStart: BryanToolsAutoStartController
     let tools: [any ToolModule]
 
     private lazy var settingsPanelController = BryanToolsSettingsPanelController(environment: self)
@@ -30,7 +31,8 @@ final class BryanToolsEnvironment: ObservableObject {
         screenOCR: ScreenOCRModule,
         trayCal: TrayCalModule,
         diskSpaceMonitor: DiskSpaceMonitorModule,
-        updater: BryanToolsUpdater
+        updater: BryanToolsUpdater,
+        autoStart: BryanToolsAutoStartController
     ) {
         self.clipboardHistory = clipboardHistory
         self.colorPicker = colorPicker
@@ -42,6 +44,7 @@ final class BryanToolsEnvironment: ObservableObject {
         self.trayCal = trayCal
         self.diskSpaceMonitor = diskSpaceMonitor
         self.updater = updater
+        self.autoStart = autoStart
         self.tools = [
             clipboardHistory,
             colorPicker,
@@ -67,6 +70,7 @@ final class BryanToolsEnvironment: ObservableObject {
     }
 
     func start() {
+        autoStart.reconcile()
         for tool in tools {
             tool.start()
         }
@@ -93,7 +97,8 @@ final class BryanToolsEnvironment: ObservableObject {
             screenOCR: ScreenOCRModule.shared,
             trayCal: TrayCalModule.shared,
             diskSpaceMonitor: DiskSpaceMonitorModule.shared,
-            updater: BryanToolsUpdater()
+            updater: BryanToolsUpdater(),
+            autoStart: BryanToolsAutoStartController()
         )
     }
 }

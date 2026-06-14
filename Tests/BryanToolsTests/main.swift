@@ -699,6 +699,40 @@ private func testBryanToolsUpdateScriptResolver() throws {
     )
 }
 
+private func testBryanToolsAutoStartDefaultsAndLaunchAgent() throws {
+    let (defaults, suiteName) = try makeTemporaryDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    try expect(
+        BryanToolsAutoStart.isEnabledByDefault(defaults: defaults),
+        "Expected Bryan Tools auto start to default on"
+    )
+
+    defaults.set(false, forKey: BryanToolsAutoStart.defaultsKey)
+    try expect(
+        !BryanToolsAutoStart.isEnabledByDefault(defaults: defaults),
+        "Expected Bryan Tools auto start preference to persist disabled state"
+    )
+
+    let home = URL(fileURLWithPath: "/tmp/test-home", isDirectory: true)
+    try expect(
+        BryanToolsAutoStart.launchAgentURL(homeDirectory: home).path
+            == "/tmp/test-home/Library/LaunchAgents/com.local.BryanTools.autostart.plist",
+        "Expected auto start LaunchAgent to live under the user LaunchAgents folder"
+    )
+
+    let plist = BryanToolsAutoStart.launchAgentPlist()
+    try expect(
+        plist["Label"] as? String == BryanToolsAutoStart.launchAgentLabel,
+        "Expected auto start LaunchAgent label"
+    )
+    try expect(
+        plist["ProgramArguments"] as? [String] == ["/usr/bin/open", "/Applications/Bryan Tools.app"],
+        "Expected auto start LaunchAgent to open the installed Applications app"
+    )
+    try expect(plist["RunAtLoad"] as? Bool == true, "Expected auto start LaunchAgent to run at login")
+}
+
 private func testShotFloatDefaultHotKey() throws {
     try expect(
         AppHotKey.defaultShotFloatValue.displayString == "Command-Shift-2",
@@ -1185,6 +1219,7 @@ private let tests: [(String, () throws -> Void)] = [
     ("QuickTask command line prefix", testQuickTaskCommandLinePrefix),
     ("MouseMacro command parser", testMouseMacroCommandParser),
     ("Bryan Tools update script resolver", testBryanToolsUpdateScriptResolver),
+    ("Bryan Tools auto start defaults", testBryanToolsAutoStartDefaultsAndLaunchAgent),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
     ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),
     ("TrayCal tool identifier", testTrayCalToolIdentifier),

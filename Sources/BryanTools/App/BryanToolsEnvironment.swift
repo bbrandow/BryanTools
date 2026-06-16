@@ -15,6 +15,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let screenOCR: ScreenOCRModule
     let trayCal: TrayCalModule
     let diskSpaceMonitor: DiskSpaceMonitorModule
+    let utcHour: UTCHourModule
     let updater: BryanToolsUpdater
     let autoStart: BryanToolsAutoStartController
     let tools: [any ToolModule]
@@ -31,6 +32,7 @@ final class BryanToolsEnvironment: ObservableObject {
         screenOCR: ScreenOCRModule,
         trayCal: TrayCalModule,
         diskSpaceMonitor: DiskSpaceMonitorModule,
+        utcHour: UTCHourModule,
         updater: BryanToolsUpdater,
         autoStart: BryanToolsAutoStartController
     ) {
@@ -43,6 +45,7 @@ final class BryanToolsEnvironment: ObservableObject {
         self.screenOCR = screenOCR
         self.trayCal = trayCal
         self.diskSpaceMonitor = diskSpaceMonitor
+        self.utcHour = utcHour
         self.updater = updater
         self.autoStart = autoStart
         self.tools = [
@@ -54,7 +57,8 @@ final class BryanToolsEnvironment: ObservableObject {
             shotFloat,
             screenOCR,
             trayCal,
-            diskSpaceMonitor
+            diskSpaceMonitor,
+            utcHour
         ]
         screenOCR.setTextOutputHandler { text in
             try clipboardHistory.copyTextToClipboardAndHistory(text)
@@ -97,6 +101,7 @@ final class BryanToolsEnvironment: ObservableObject {
             screenOCR: ScreenOCRModule.shared,
             trayCal: TrayCalModule.shared,
             diskSpaceMonitor: DiskSpaceMonitorModule.shared,
+            utcHour: UTCHourModule.shared,
             updater: BryanToolsUpdater(),
             autoStart: BryanToolsAutoStartController()
         )

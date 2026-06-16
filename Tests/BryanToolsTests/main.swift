@@ -882,6 +882,60 @@ private func testTrayCalMonthAndYearJumpState() throws {
     )
 }
 
+private func utcHourTestDate() throws -> Date {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = UTCHourDisplay.utcTimeZone
+    return try require(
+        calendar.date(from: DateComponents(
+            timeZone: UTCHourDisplay.utcTimeZone,
+            year: 2026,
+            month: 6,
+            day: 16,
+            hour: 20,
+            minute: 37
+        )),
+        "Expected UTC Hour test date"
+    )
+}
+
+private func testUTCHourToolIdentifier() throws {
+    try expect(ToolIdentifier.utcHour.displayName == "UTC Hour", "Expected UTC Hour tool display name")
+}
+
+private func testUTCHourStatusTitleFormatting() throws {
+    let date = try utcHourTestDate()
+    try expect(
+        UTCHourDisplay.statusTitle(for: date) == "2026-06-16T20",
+        "Expected UTC Hour status title to use yyyy-MM-dd'T'HH format"
+    )
+}
+
+private func testUTCHourPacificLookupRows() throws {
+    let date = try utcHourTestDate()
+    let rows = UTCHourDisplay.lookupRows(centeredAt: date)
+    let currentRows = rows.filter(\.isCurrentHour)
+
+    try expect(rows.count == 145, "Expected UTC Hour lookup to load 72 prior, current, and 72 future hours")
+    try expect(currentRows.count == 1, "Expected UTC Hour lookup to mark one current hour")
+    try expect(currentRows.first?.utcTitle == "2026-06-16T20", "Expected current UTC lookup row")
+    try expect(currentRows.first?.pacificTitle == "2026-06-16T13", "Expected current Pacific lookup row")
+    try expect(rows.first?.utcTitle == "2026-06-13T20", "Expected first UTC lookup row to be 72 hours prior")
+    try expect(rows.last?.utcTitle == "2026-06-19T20", "Expected last UTC lookup row to be 72 hours ahead")
+}
+
+private func testUTCHourPreferenceDefaults() throws {
+    let (defaults, suiteName) = try makeTemporaryDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    try expect(
+        UTCHourPreferences.load(defaults: defaults).isEnabled == UTCHourPreferences.defaultEnabled,
+        "Expected UTC Hour menu bar item to default on"
+    )
+
+    UTCHourPreferences(isEnabled: false).save(defaults: defaults)
+    try expect(!UTCHourPreferences.load(defaults: defaults).isEnabled, "Expected UTC Hour enabled setting to persist")
+}
+
 private func testDiskSpaceDisplayFormatting() throws {
     let sample = DiskSpaceSample(
         sampledAt: Date(),
@@ -1230,6 +1284,10 @@ private let tests: [(String, () throws -> Void)] = [
     ("TrayCal today reset", testTrayCalTodayResetState),
     ("TrayCal popover close reset", testTrayCalPopoverResetAfterCloseThreshold),
     ("TrayCal month/year jump", testTrayCalMonthAndYearJumpState),
+    ("UTC Hour tool identifier", testUTCHourToolIdentifier),
+    ("UTC Hour status title", testUTCHourStatusTitleFormatting),
+    ("UTC Hour Pacific lookup rows", testUTCHourPacificLookupRows),
+    ("UTC Hour preference defaults", testUTCHourPreferenceDefaults),
     ("Disk Space display formatting", testDiskSpaceDisplayFormatting),
     ("Disk Space warning threshold", testDiskSpaceWarningThreshold),
     ("Disk Space preference defaults", testDiskSpacePreferencesDefaults),

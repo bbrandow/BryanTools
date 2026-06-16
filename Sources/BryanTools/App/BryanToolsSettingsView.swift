@@ -13,6 +13,7 @@ struct BryanToolsSettingsView: View {
     @ObservedObject private var shotFloat: ShotFloatModule
     @ObservedObject private var screenOCR: ScreenOCRModule
     @ObservedObject private var diskSpaceMonitor: DiskSpaceMonitorModule
+    @ObservedObject private var utcHour: UTCHourModule
     @ObservedObject private var updater: BryanToolsUpdater
     @ObservedObject private var autoStart: BryanToolsAutoStartController
 
@@ -29,6 +30,7 @@ struct BryanToolsSettingsView: View {
         self.shotFloat = environment.shotFloat
         self.screenOCR = environment.screenOCR
         self.diskSpaceMonitor = environment.diskSpaceMonitor
+        self.utcHour = environment.utcHour
         self.updater = environment.updater
         self.autoStart = environment.autoStart
     }
@@ -189,6 +191,11 @@ struct BryanToolsSettingsView: View {
                             .toggleStyle(.checkbox)
                     }
 
+                    compactRow("UTC Hour") {
+                        Toggle("Show in menu bar", isOn: utcHourEnabledBinding)
+                            .toggleStyle(.checkbox)
+                    }
+
                     compactRow("Source") {
                         HStack(spacing: 8) {
                             Text(updater.sourceRootPath)
@@ -297,6 +304,7 @@ struct BryanToolsSettingsView: View {
             prefixedError("ShotFloat", shotFloat.lastErrorMessage),
             prefixedError("Screen OCR", screenOCR.lastErrorMessage),
             prefixedError("Disk Space", diskSpaceMonitor.lastErrorMessage),
+            prefixedError("UTC Hour", utcHour.lastErrorMessage),
             prefixedError("Auto Start", autoStart.lastErrorMessage),
             prefixedError("Updater", updater.lastErrorMessage)
         ].compactMap { $0 }
@@ -337,6 +345,13 @@ struct BryanToolsSettingsView: View {
         Binding(
             get: { autoStart.isEnabled },
             set: { autoStart.updateEnabled($0) }
+        )
+    }
+
+    private var utcHourEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { utcHour.isEnabled },
+            set: { utcHour.updateEnabled($0) }
         )
     }
 

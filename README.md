@@ -14,6 +14,7 @@ utilities can be added without coupling their interfaces together.
 | --- | --- | --- |
 | TrayCal | Menu bar date label | Calendar popover, app settings, and quit control |
 | Disk Space Monitor | Menu bar free-space label | Primary-drive free-space sampling and trend chart |
+| UTC Hour | Menu bar UTC hour label | UTC-to-Pacific hour lookup table |
 | Clipboard History | `Shift-Command-V` | Search, restore, delete, and float clipboard clips |
 | Paste Plain Text | `Shift-Option-Command-V` | Paste current clipboard text without formatting |
 | Color Picker | `Shift-Command-~` | Pick any screen pixel color as a hex value |
@@ -224,6 +225,30 @@ Storage:
 
 > Screenshot placeholder: show the disk-space menu bar label and its popover with
 > current free space, last updated time, "Now", "Last hours", and the trend chart.
+
+## UTC Hour
+
+UTC Hour adds a separate menu bar item showing the current UTC hour:
+
+```text
+2026-06-16T20
+```
+
+It is intended as a quick lookup table for translating UTC hours to Pacific
+hours.
+
+Features:
+
+- Enabled by default.
+- Menu bar title uses `yyyy-MM-dd'T'HH` in UTC.
+- Updates automatically as the current UTC hour changes.
+- Popover table compares UTC hour against Pacific hour.
+- Lookup table loads 72 hours before and 72 hours after the current hour.
+- Current hour row is highlighted.
+- Settings toggle controls whether the menu bar item is shown.
+
+> Screenshot placeholder: show the UTC Hour menu bar label and popover table with
+> UTC and Pacific columns and the current hour highlighted.
 
 ## Clipboard History
 
@@ -506,6 +531,7 @@ Settings are opened from the TrayCal gear button. The settings window contains:
 - A consolidated hotkey section.
 - Clipboard History capture, retention, and storage controls.
 - Disk Space Monitor visibility and warning threshold.
+- UTC Hour menu bar visibility.
 - Application auto-start, updater source, and Update Now controls.
 - MouseMacro mapping controls.
 - Status messages for tool-specific errors.

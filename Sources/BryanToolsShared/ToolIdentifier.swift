@@ -10,6 +10,7 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
     case screenOCR
     case trayCal
     case diskSpaceMonitor
+    case utcHour
 
     public var id: String {
         rawValue
@@ -35,6 +36,8 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
             return "TrayCal"
         case .diskSpaceMonitor:
             return "Disk Space Monitor"
+        case .utcHour:
+            return "UTC Hour"
         }
     }
 

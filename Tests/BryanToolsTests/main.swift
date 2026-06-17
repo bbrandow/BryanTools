@@ -918,9 +918,33 @@ private func testUTCHourPacificLookupRows() throws {
     try expect(rows.count == 145, "Expected UTC Hour lookup to load 72 prior, current, and 72 future hours")
     try expect(currentRows.count == 1, "Expected UTC Hour lookup to mark one current hour")
     try expect(currentRows.first?.utcTitle == "2026-06-16T20", "Expected current UTC lookup row")
-    try expect(currentRows.first?.pacificTitle == "2026-06-16T13", "Expected current Pacific lookup row")
+    try expect(currentRows.first?.pacificTitle == "June 16,  1:00pm", "Expected current Pacific lookup row to include date and padded 12-hour time")
+    try expect(currentRows.first?.isPacificMidnight == false, "Expected current Pacific lookup row not to be marked as midnight")
     try expect(rows.first?.utcTitle == "2026-06-13T20", "Expected first UTC lookup row to be 72 hours prior")
     try expect(rows.last?.utcTitle == "2026-06-19T20", "Expected last UTC lookup row to be 72 hours ahead")
+
+    let midnightRow = try require(
+        rows.first { $0.utcTitle == "2026-06-17T07" },
+        "Expected UTC lookup row for Pacific midnight"
+    )
+    try expect(
+        midnightRow.pacificTitle == "June 17, 12:00am",
+        "Expected Pacific midnight row to include the date"
+    )
+    try expect(midnightRow.isPacificMidnight, "Expected Pacific midnight row to be marked for outline styling")
+
+    let oneAMRow = try require(
+        rows.first { $0.utcTitle == "2026-06-17T08" },
+        "Expected UTC lookup row for Pacific 1am"
+    )
+    try expect(oneAMRow.pacificTitle == "June 17,  1:00am", "Expected single-digit Pacific hour to include left padding")
+    try expect(!oneAMRow.isPacificMidnight, "Expected non-midnight Pacific row not to be outlined")
+
+    let tenAMRow = try require(
+        rows.first { $0.utcTitle == "2026-06-17T17" },
+        "Expected UTC lookup row for Pacific 10am"
+    )
+    try expect(tenAMRow.pacificTitle == "June 17, 10:00am", "Expected two-digit Pacific hour not to include left padding")
 }
 
 private func testUTCHourPreferenceDefaults() throws {

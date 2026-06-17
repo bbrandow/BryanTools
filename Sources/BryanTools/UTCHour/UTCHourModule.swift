@@ -162,7 +162,7 @@ final class UTCHourModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
     private func makePopover() -> NSPopover {
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 360, height: 420)
+        popover.contentSize = NSSize(width: 410, height: 420)
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: UTCHourPopoverView(environment: self))
         return popover

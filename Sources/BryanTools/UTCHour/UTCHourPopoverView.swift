@@ -15,8 +15,8 @@ struct UTCHourPopoverView: View {
             }
 
             HStack(spacing: 0) {
-                tableHeader("UTC")
-                tableHeader("Pacific")
+                tableHeader("UTC", alignment: .leading)
+                tableHeader("Pacific", alignment: .trailing)
             }
 
             Divider()
@@ -44,15 +44,15 @@ struct UTCHourPopoverView: View {
             }
         }
         .padding(14)
-        .frame(width: 360, height: 420, alignment: .topLeading)
+        .frame(width: 410, height: 420, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    private func tableHeader(_ title: String) -> some View {
+    private func tableHeader(_ title: String, alignment: Alignment) -> some View {
         Text(title)
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: alignment)
             .padding(.horizontal, 10)
     }
 
@@ -62,18 +62,27 @@ struct UTCHourPopoverView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
             Text(row.pacificTitle)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.horizontal, 10)
         }
         .font(.system(size: 13, weight: row.isCurrentHour ? .semibold : .regular, design: .monospaced))
         .foregroundStyle(row.isCurrentHour ? Color.primary : Color.secondary)
         .frame(height: 28)
         .background {
-            if row.isCurrentHour {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.accentColor.opacity(0.16))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
+            ZStack {
+                if row.isCurrentHour {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.accentColor.opacity(0.16))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                }
+
+                if row.isPacificMidnight {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.55), lineWidth: 1)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                }
             }
         }
     }

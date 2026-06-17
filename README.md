@@ -243,6 +243,8 @@ Features:
 - Menu bar title uses `yyyy-MM-dd'T'HH` in UTC.
 - Updates automatically as the current UTC hour changes.
 - Popover table compares UTC hour against Pacific hour.
+- Pacific rows include date plus 12-hour time, such as `June 17,  1:00am`.
+- Pacific midnight rows have a boxed outline to visually break up days.
 - Lookup table loads 72 hours before and 72 hours after the current hour.
 - Current hour row is highlighted.
 - Settings toggle controls whether the menu bar item is shown.

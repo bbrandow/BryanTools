@@ -14,6 +14,7 @@ struct BryanToolsSettingsView: View {
     @ObservedObject private var screenOCR: ScreenOCRModule
     @ObservedObject private var diskSpaceMonitor: DiskSpaceMonitorModule
     @ObservedObject private var utcHour: UTCHourModule
+    @ObservedObject private var vehicleMotionCues: VehicleMotionCuesModule
     @ObservedObject private var updater: BryanToolsUpdater
     @ObservedObject private var autoStart: BryanToolsAutoStartController
 
@@ -31,6 +32,7 @@ struct BryanToolsSettingsView: View {
         self.screenOCR = environment.screenOCR
         self.diskSpaceMonitor = environment.diskSpaceMonitor
         self.utcHour = environment.utcHour
+        self.vehicleMotionCues = environment.vehicleMotionCues
         self.updater = environment.updater
         self.autoStart = environment.autoStart
     }
@@ -196,6 +198,11 @@ struct BryanToolsSettingsView: View {
                             .toggleStyle(.checkbox)
                     }
 
+                    compactRow("Motion Cues") {
+                        Toggle("Show toggle in menu bar", isOn: vehicleMotionCuesTrayEnabledBinding)
+                            .toggleStyle(.checkbox)
+                    }
+
                     compactRow("Source") {
                         HStack(spacing: 8) {
                             Text(updater.sourceRootPath)
@@ -305,6 +312,7 @@ struct BryanToolsSettingsView: View {
             prefixedError("Screen OCR", screenOCR.lastErrorMessage),
             prefixedError("Disk Space", diskSpaceMonitor.lastErrorMessage),
             prefixedError("UTC Hour", utcHour.lastErrorMessage),
+            prefixedError("Vehicle Motion Cues", vehicleMotionCues.lastErrorMessage),
             prefixedError("Auto Start", autoStart.lastErrorMessage),
             prefixedError("Updater", updater.lastErrorMessage)
         ].compactMap { $0 }
@@ -352,6 +360,13 @@ struct BryanToolsSettingsView: View {
         Binding(
             get: { utcHour.isEnabled },
             set: { utcHour.updateEnabled($0) }
+        )
+    }
+
+    private var vehicleMotionCuesTrayEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { vehicleMotionCues.isTrayEnabled },
+            set: { vehicleMotionCues.updateTrayEnabled($0) }
         )
     }
 

@@ -960,6 +960,54 @@ private func testUTCHourPreferenceDefaults() throws {
     try expect(!UTCHourPreferences.load(defaults: defaults).isEnabled, "Expected UTC Hour enabled setting to persist")
 }
 
+private func testVehicleMotionCuesToolIdentifier() throws {
+    try expect(ToolIdentifier.vehicleMotionCues.rawValue == "vehicleMotionCues", "Expected Vehicle Motion Cues tool identifier")
+    try expect(ToolIdentifier.vehicleMotionCues.displayName == "Vehicle Motion Cues", "Expected Vehicle Motion Cues display name")
+}
+
+private func testVehicleMotionCuesDisplayState() throws {
+    let enabled = VehicleMotionCuesSnapshot(isSupported: true, isEnabled: true, isActive: true)
+    try expect(VehicleMotionCuesDisplay.systemImageName(for: enabled) == "car.side.fill", "Expected enabled Vehicle Motion Cues tray icon")
+    try expect(VehicleMotionCuesDisplay.tooltip(for: enabled) == "Vehicle Motion Cues: On", "Expected enabled Vehicle Motion Cues tooltip")
+    try expect(
+        VehicleMotionCuesDisplay.accessibilityLabel(for: enabled) == "Turn Vehicle Motion Cues off",
+        "Expected enabled Vehicle Motion Cues accessibility label"
+    )
+
+    let starting = VehicleMotionCuesSnapshot(isSupported: true, isEnabled: true, isActive: false)
+    try expect(VehicleMotionCuesDisplay.systemImageName(for: starting) == "car.side", "Expected inactive Vehicle Motion Cues tray icon when runtime state has not started")
+    try expect(
+        VehicleMotionCuesDisplay.tooltip(for: starting) == "Vehicle Motion Cues: Enabled, not active",
+        "Expected Vehicle Motion Cues tooltip to distinguish persisted and runtime state"
+    )
+
+    let disabled = VehicleMotionCuesSnapshot(isSupported: true, isEnabled: false, isActive: false)
+    try expect(VehicleMotionCuesDisplay.systemImageName(for: disabled) == "car.side", "Expected disabled Vehicle Motion Cues tray icon")
+    try expect(VehicleMotionCuesDisplay.tooltip(for: disabled) == "Vehicle Motion Cues: Off", "Expected disabled Vehicle Motion Cues tooltip")
+
+    let unsupported = VehicleMotionCuesSnapshot(isSupported: false, isEnabled: false, isActive: false)
+    try expect(
+        VehicleMotionCuesDisplay.tooltip(for: unsupported) == "Vehicle Motion Cues unavailable on this Mac",
+        "Expected unsupported Vehicle Motion Cues tooltip"
+    )
+}
+
+private func testVehicleMotionCuesPreferenceDefaults() throws {
+    let (defaults, suiteName) = try makeTemporaryDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    try expect(
+        VehicleMotionCuesPreferences.load(defaults: defaults).isTrayEnabled == VehicleMotionCuesPreferences.defaultTrayEnabled,
+        "Expected Vehicle Motion Cues tray toggle to default on"
+    )
+
+    VehicleMotionCuesPreferences(isTrayEnabled: false).save(defaults: defaults)
+    try expect(
+        !VehicleMotionCuesPreferences.load(defaults: defaults).isTrayEnabled,
+        "Expected Vehicle Motion Cues tray visibility setting to persist"
+    )
+}
+
 private func testDiskSpaceDisplayFormatting() throws {
     let sample = DiskSpaceSample(
         sampledAt: Date(),
@@ -1312,6 +1360,9 @@ private let tests: [(String, () throws -> Void)] = [
     ("UTC Hour status title", testUTCHourStatusTitleFormatting),
     ("UTC Hour Pacific lookup rows", testUTCHourPacificLookupRows),
     ("UTC Hour preference defaults", testUTCHourPreferenceDefaults),
+    ("Vehicle Motion Cues tool identifier", testVehicleMotionCuesToolIdentifier),
+    ("Vehicle Motion Cues display state", testVehicleMotionCuesDisplayState),
+    ("Vehicle Motion Cues preference defaults", testVehicleMotionCuesPreferenceDefaults),
     ("Disk Space display formatting", testDiskSpaceDisplayFormatting),
     ("Disk Space warning threshold", testDiskSpaceWarningThreshold),
     ("Disk Space preference defaults", testDiskSpacePreferencesDefaults),

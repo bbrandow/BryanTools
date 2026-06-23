@@ -16,6 +16,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let trayCal: TrayCalModule
     let diskSpaceMonitor: DiskSpaceMonitorModule
     let utcHour: UTCHourModule
+    let vehicleMotionCues: VehicleMotionCuesModule
     let updater: BryanToolsUpdater
     let autoStart: BryanToolsAutoStartController
     let tools: [any ToolModule]
@@ -33,6 +34,7 @@ final class BryanToolsEnvironment: ObservableObject {
         trayCal: TrayCalModule,
         diskSpaceMonitor: DiskSpaceMonitorModule,
         utcHour: UTCHourModule,
+        vehicleMotionCues: VehicleMotionCuesModule,
         updater: BryanToolsUpdater,
         autoStart: BryanToolsAutoStartController
     ) {
@@ -46,6 +48,7 @@ final class BryanToolsEnvironment: ObservableObject {
         self.trayCal = trayCal
         self.diskSpaceMonitor = diskSpaceMonitor
         self.utcHour = utcHour
+        self.vehicleMotionCues = vehicleMotionCues
         self.updater = updater
         self.autoStart = autoStart
         self.tools = [
@@ -58,7 +61,8 @@ final class BryanToolsEnvironment: ObservableObject {
             screenOCR,
             trayCal,
             diskSpaceMonitor,
-            utcHour
+            utcHour,
+            vehicleMotionCues
         ]
         screenOCR.setTextOutputHandler { text in
             try clipboardHistory.copyTextToClipboardAndHistory(text)
@@ -102,6 +106,7 @@ final class BryanToolsEnvironment: ObservableObject {
             trayCal: TrayCalModule.shared,
             diskSpaceMonitor: DiskSpaceMonitorModule.shared,
             utcHour: UTCHourModule.shared,
+            vehicleMotionCues: VehicleMotionCuesModule.shared,
             updater: BryanToolsUpdater(),
             autoStart: BryanToolsAutoStartController()
         )

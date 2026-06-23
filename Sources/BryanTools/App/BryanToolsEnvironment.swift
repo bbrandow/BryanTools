@@ -75,6 +75,7 @@ final class BryanToolsEnvironment: ObservableObject {
                 NSApp.terminate(nil)
             }
         )
+        trayCal.setVehicleMotionCues(vehicleMotionCues)
     }
 
     func start() {

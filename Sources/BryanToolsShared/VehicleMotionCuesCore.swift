@@ -1,30 +1,6 @@
 import Darwin
 import Foundation
 
-public struct VehicleMotionCuesPreferences: Equatable {
-    public static let defaultTrayEnabled = true
-
-    public var isTrayEnabled: Bool
-
-    public init(isTrayEnabled: Bool) {
-        self.isTrayEnabled = isTrayEnabled
-    }
-
-    public static func load(defaults: UserDefaults = .standard) -> VehicleMotionCuesPreferences {
-        let isTrayEnabled: Bool
-        if defaults.object(forKey: "vehicleMotionCues.isTrayEnabled") == nil {
-            isTrayEnabled = defaultTrayEnabled
-        } else {
-            isTrayEnabled = defaults.bool(forKey: "vehicleMotionCues.isTrayEnabled")
-        }
-        return VehicleMotionCuesPreferences(isTrayEnabled: isTrayEnabled)
-    }
-
-    public func save(defaults: UserDefaults = .standard) {
-        defaults.set(isTrayEnabled, forKey: "vehicleMotionCues.isTrayEnabled")
-    }
-}
-
 public enum VehicleMotionCuesError: Error, LocalizedError, Equatable {
     case frameworkUnavailable(String)
     case symbolUnavailable(String)
@@ -89,7 +65,6 @@ public final class SystemVehicleMotionCuesController {
         "/System/Library/PrivateFrameworks/AXMotionCuesServices.framework/Versions/A/AXMotionCuesServices"
     public static let accessibilityUtilitiesPath =
         "/System/Library/PrivateFrameworks/AccessibilityUtilities.framework/Versions/A/AccessibilityUtilities"
-    public static let preferenceDidChangeNotificationName = "com.apple.accessibility.motion.cues.changed"
 
     private typealias BoolGetter = @convention(c) () -> Bool
     private typealias BoolSetter = @convention(c) (Bool) -> Void

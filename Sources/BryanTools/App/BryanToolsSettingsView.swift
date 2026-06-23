@@ -198,11 +198,6 @@ struct BryanToolsSettingsView: View {
                             .toggleStyle(.checkbox)
                     }
 
-                    compactRow("Motion Cues") {
-                        Toggle("Show toggle in menu bar", isOn: vehicleMotionCuesTrayEnabledBinding)
-                            .toggleStyle(.checkbox)
-                    }
-
                     compactRow("Source") {
                         HStack(spacing: 8) {
                             Text(updater.sourceRootPath)
@@ -360,13 +355,6 @@ struct BryanToolsSettingsView: View {
         Binding(
             get: { utcHour.isEnabled },
             set: { utcHour.updateEnabled($0) }
-        )
-    }
-
-    private var vehicleMotionCuesTrayEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { vehicleMotionCues.isTrayEnabled },
-            set: { vehicleMotionCues.updateTrayEnabled($0) }
         )
     }
 

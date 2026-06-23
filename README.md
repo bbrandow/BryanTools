@@ -15,7 +15,7 @@ utilities can be added without coupling their interfaces together.
 | TrayCal | Menu bar date label | Calendar popover, app settings, and quit control |
 | Disk Space Monitor | Menu bar free-space label | Primary-drive free-space sampling and trend chart |
 | UTC Hour | Menu bar UTC hour label | UTC-to-Pacific hour lookup table |
-| Vehicle Motion Cues | Menu bar toggle icon | One-click on/off control for macOS Vehicle Motion Cues |
+| Vehicle Motion Cues | TrayCal footer toggle | One-click on/off control for macOS Vehicle Motion Cues |
 | Clipboard History | `Shift-Command-V` | Search, restore, delete, and float clipboard clips |
 | Paste Plain Text | `Shift-Option-Command-V` | Paste current clipboard text without formatting |
 | Color Picker | `Shift-Command-~` | Pick any screen pixel color as a hex value |
@@ -31,8 +31,8 @@ The repo does not currently include committed screenshots. Add them under
 `Docs/Screenshots/` when useful.
 
 > Screenshot placeholder: `Docs/Screenshots/traycal-popover.png` should show the
-> menu bar date label and TrayCal calendar popover with today, payday dots, gear,
-> and power controls visible.
+> menu bar date label and TrayCal calendar popover with today, payday dots,
+> Vehicle Motion Cues, gear, and power controls visible.
 
 > Screenshot placeholder: `Docs/Screenshots/quicktask.png` should show the
 > QuickTask command bar with an app match, a calculation result, and command-line
@@ -255,22 +255,22 @@ Features:
 
 ## Vehicle Motion Cues
 
-Vehicle Motion Cues adds a small car icon to the menu bar for the macOS
-Accessibility > Motion feature. Clicking the icon toggles the system Vehicle
-Motion Cues setting on or off. The icon is filled and accented while cues are
-enabled, and outlined/subdued while disabled.
+Vehicle Motion Cues adds a small car icon to the bottom of the TrayCal popover
+for the macOS Accessibility > Motion feature. Clicking the icon toggles the
+system Vehicle Motion Cues setting on or off. The icon is filled and accented
+while cues are enabled, and outlined/subdued while disabled.
 
 Notes:
 
 - Uses the local macOS Accessibility Motion Cues service; no network calls.
-- Settings can hide or show the Bryan Tools menu bar toggle without changing
-  the macOS Vehicle Motion Cues setting.
+- Does not poll in the background; Bryan Tools manages this from launch and the
+  TrayCal footer toggle.
 - If the current Mac does not support Vehicle Motion Cues, the icon shows an
   unavailable tooltip.
 - Apple limits this feature to supported Mac laptop models.
 
-> Screenshot placeholder: show the Vehicle Motion Cues menu bar icon in both
-> on and off states.
+> Screenshot placeholder: show the Vehicle Motion Cues TrayCal footer icon in
+> both on and off states.
 
 ## Clipboard History
 

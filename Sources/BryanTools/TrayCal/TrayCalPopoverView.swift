@@ -4,6 +4,7 @@ import SwiftUI
 
 struct TrayCalPopoverView: View {
     @ObservedObject var environment: TrayCalModule
+    @ObservedObject var vehicleMotionCues: VehicleMotionCuesModule
     @State private var showingMonthPicker = false
     @State private var editingYear = false
     @State private var yearText = ""
@@ -24,9 +25,14 @@ struct TrayCalPopoverView: View {
             Spacer(minLength: 0)
 
             HStack {
-                iconButton(systemImage: "power", size: 16, action: environment.quit)
-                    .padding(3)
-                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                HStack(spacing: 5) {
+                    iconButton(systemImage: "power", size: 16, action: environment.quit)
+                        .padding(3)
+                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                        .help("Quit Bryan Tools")
+
+                    motionCuesButton
+                }
 
                 Spacer()
 
@@ -89,6 +95,36 @@ struct TrayCalPopoverView: View {
             iconButton(systemImage: "chevron.right", size: 12, hitSize: 30, action: environment.showNextMonth)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var motionCuesButton: some View {
+        Button(action: vehicleMotionCues.toggleEnabled) {
+            Image(systemName: VehicleMotionCuesDisplay.systemImageName(for: vehicleMotionCues.snapshot))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(motionCuesTint)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(vehicleMotionCues.snapshot.isOn ? 0.95 : 0.7))
+        .help(self.motionCuesHelp)
+        .accessibilityLabel(Text(self.motionCuesAccessibilityLabel))
+        .disabled(!vehicleMotionCues.snapshot.isSupported)
+    }
+
+    private var motionCuesTint: Color {
+        if vehicleMotionCues.lastErrorMessage != nil || !vehicleMotionCues.snapshot.isSupported {
+            return .red
+        }
+        return vehicleMotionCues.snapshot.isOn ? .accentColor : .secondary
+    }
+
+    private var motionCuesHelp: String {
+        vehicleMotionCues.lastErrorMessage ?? VehicleMotionCuesDisplay.tooltip(for: vehicleMotionCues.snapshot)
+    }
+
+    private var motionCuesAccessibilityLabel: String {
+        vehicleMotionCues.lastErrorMessage ?? VehicleMotionCuesDisplay.accessibilityLabel(for: vehicleMotionCues.snapshot)
     }
 
     private var monthPicker: some View {

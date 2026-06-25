@@ -57,8 +57,7 @@ Features:
 
 - Month grid with Sunday as the first day of the week.
 - Today highlight.
-- Payday indicators as small green dots. Paydays are every other Friday, anchored
-  from May 29, 2026.
+- Payday indicators as small green dots. Paydays are every other Friday
 - Previous and next month controls.
 - Dot button to return to today.
 - Clickable month picker.
@@ -68,8 +67,8 @@ Features:
 - Calendar view resets to today after the popover has been closed for two
   minutes.
 
-> Screenshot placeholder: show TrayCal opened from the menu bar, with the
-> current day highlighted and a green payday dot under a Friday.
+<img width="314" height="357" alt="image" src="https://github.com/user-attachments/assets/794b2319-587c-41e1-972a-43dbc686ed7b" />
+
 
 ## Disk Space Monitor
 
@@ -103,8 +102,9 @@ Storage:
 ~/Library/Application Support/Bryan Tools/Disk Space Monitor/DiskSpace.sqlite
 ```
 
-> Screenshot placeholder: show the disk-space menu bar label and its popover with
-> current free space, last updated time, "Now", "Last hours", and the trend chart.
+<img width="372" height="310" alt="image" src="https://github.com/user-attachments/assets/3febc7a6-3181-42fd-b42b-67d53ca87ea2" />
+
+
 
 ## UTC Hour
 
@@ -129,8 +129,7 @@ Features:
 - Current hour row is highlighted.
 - Settings toggle controls whether the menu bar item is shown.
 
-> Screenshot placeholder: show the UTC Hour menu bar label and popover table with
-> UTC and Pacific columns and the current hour highlighted.
+<img width="496" height="462" alt="image" src="https://github.com/user-attachments/assets/14f48d02-7c60-47ee-a8a6-6069ff22fc94" />
 
 ## Vehicle Motion Cues
 
@@ -148,8 +147,7 @@ Notes:
   unavailable tooltip.
 - Apple limits this feature to supported Mac laptop models.
 
-> Screenshot placeholder: show the Vehicle Motion Cues TrayCal footer icon in
-> both on and off states.
+More information on this Apple feature (iOS and macOS): https://www.theverge.com/tech/942854/apple-vehicle-motion-cues-review-really-work
 
 ## Clipboard History
 
@@ -187,14 +185,6 @@ Storage:
 ~/Library/Application Support/Bryan Tools/Clipboard History/
 ```
 
-On first launch, Bryan Tools copies legacy ClipMan data from:
-
-```text
-~/Library/Application Support/ClipMan/
-```
-
-The old ClipMan data is left in place as a rollback backup.
-
 Security and privacy:
 
 - Stored clipboard metadata, payloads, and thumbnails are encrypted at rest with
@@ -206,16 +196,19 @@ Security and privacy:
 - Browser credential-like strings are skipped where possible, while normal text,
   UUIDs, OTP-shaped values, and color hex codes remain capturable.
 
-Compatibility note: the SQLite file remains named `ClipMan.sqlite` for migrated
-data compatibility.
+Pop up on shortcut key:
+<img width="872" height="652" alt="image" src="https://github.com/user-attachments/assets/297e2804-1605-4a30-8529-048838d24ca2" />
 
-> Screenshot placeholder: show the Clipboard History panel with text results,
-> one hex color swatch, one image clip, and the image float button.
+Hover over an image to see a preview:
+<img width="872" height="704" alt="image" src="https://github.com/user-attachments/assets/b9cb4bd1-58ce-40c6-840c-2591d3485ab4" />
+
 
 ## Paste Plain Text
 
 Paste Plain Text rewrites the current clipboard as plain text, posts a paste
 command, and then restores the original clipboard when safe.
+
+This used to work natively in macOS, but now only works in certain applications. This makes it work globally.
 
 Default shortcut:
 
@@ -251,8 +244,8 @@ Features:
 
 Requires Screen Recording permission.
 
-> Screenshot placeholder: show the Color Picker magnifier over a colorful UI
-> area with the picked hex color visible.
+<img width="295" height="225" alt="image" src="https://github.com/user-attachments/assets/27441e40-dd45-4e94-8f3b-98385c3dccb5" />
+
 
 ## MacroText
 
@@ -297,13 +290,14 @@ Supported offsets include hours, days, weeks, months, and years.
 
 Requires Accessibility permission.
 
-> Screenshot placeholder: show the MacroText settings list with commands,
-> replacement text, edit controls, and a dynamic date replacement.
+<img width="792" height="440" alt="image" src="https://github.com/user-attachments/assets/f6d69e70-a561-4b04-a9d7-a1b3fc192875" />
+
 
 ## QuickTask
 
 QuickTask is a lightweight command bar for launching apps, calculating values,
 and running explicit shell commands.
+Best used as a replacement for the Spotlight Search hotkey
 
 Default shortcut:
 
@@ -342,13 +336,17 @@ Command-line mode:
 - Commands are cancelled when replaced or closed.
 - Output is capped and long-running commands time out.
 
-> Screenshot placeholder: show QuickTask in app-search mode, calculator mode,
-> and command-line mode with the `>` icon.
+Quick launch an application:
+<img width="872" height="606" alt="image" src="https://github.com/user-attachments/assets/6c4b2f2f-15a3-4774-aee1-18af0d446fad" />
+
+Use `>` to quickly run command line apps:
+<img width="872" height="389" alt="image" src="https://github.com/user-attachments/assets/d7214052-eac2-4f3c-9857-f025e6e3565d" />
+
 
 ## ShotFloat
 
 ShotFloat captures a region of the screen and displays it as a borderless,
-always-on-top floating image.
+always-on-top floating image. This is helpful for grabbing something from one app that you want a quick reference of on another.
 
 Default shortcut:
 
@@ -369,8 +367,7 @@ Features:
 
 Requires Screen Recording permission.
 
-> Screenshot placeholder: show a ShotFloat image floating above another app with
-> the close bar visible.
+<img width="844" height="392" alt="image" src="https://github.com/user-attachments/assets/087d488c-167c-4ca8-ba16-d7e15915fdee" />
 
 ## Screen OCR
 
@@ -398,15 +395,9 @@ Features:
 
 Requires Screen Recording permission.
 
-> Screenshot placeholder: show the OCR reticule selecting text and the resulting
-> recognized text in Clipboard History.
-
 ## MouseMacro
 
 MouseMacro maps mouse buttons to keyboard macro sequences.
-
-The first confirmed mapping was the Logitech MX Master 4 haptic button, detected
-as Button 6.
 
 Features:
 
@@ -418,12 +409,10 @@ Features:
 ```text
 cmd+shift+ctrl+4
 ```
+Which maps the screenshot tool to a mouse button.
 
 Requires Accessibility permission. Depending on macOS settings, Input Monitoring
 may also be required for event taps.
-
-> Screenshot placeholder: show MouseMacro settings with Button 6 mapped to
-> `cmd+shift+ctrl+4` and another empty mapping row.
 
 ## Settings
 

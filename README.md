@@ -8,44 +8,6 @@ The app is intentionally local-first and personal-use focused. It is not built
 for public distribution, but the codebase keeps the tools modular so new
 utilities can be added without coupling their interfaces together.
 
-## Tools
-
-| Tool | Default shortcut | Purpose |
-| --- | --- | --- |
-| TrayCal | Menu bar date label | Calendar popover, app settings, and quit control |
-| Disk Space Monitor | Menu bar free-space label | Primary-drive free-space sampling and trend chart |
-| UTC Hour | Menu bar UTC hour label | UTC-to-Pacific hour lookup table |
-| Vehicle Motion Cues | TrayCal footer toggle | One-click on/off control for macOS Vehicle Motion Cues |
-| Clipboard History | `Shift-Command-V` | Search, restore, delete, and float clipboard clips |
-| Paste Plain Text | `Shift-Option-Command-V` | Paste current clipboard text without formatting |
-| Color Picker | `Shift-Command-~` | Pick any screen pixel color as a hex value |
-| MacroText | `Shift-Command-/` | Configure global slash-command text replacements |
-| QuickTask | `Command-Space`, fallback `Option-Space` | App launcher, calculator, and command runner |
-| ShotFloat | `Shift-Command-2` | Capture a screen region into an always-on-top floating image |
-| Screen OCR | `Shift-Command-Y` | OCR a selected screen region into the clipboard |
-| MouseMacro | Settings UI | Map mouse buttons to keyboard macro sequences |
-
-## Screenshots
-
-The repo does not currently include committed screenshots. Add them under
-`Docs/Screenshots/` when useful.
-
-> Screenshot placeholder: `Docs/Screenshots/traycal-popover.png` should show the
-> menu bar date label and TrayCal calendar popover with today, payday dots,
-> Vehicle Motion Cues, gear, and power controls visible.
-
-> Screenshot placeholder: `Docs/Screenshots/quicktask.png` should show the
-> QuickTask command bar with an app match, a calculation result, and command-line
-> mode.
-
-> Screenshot placeholder: `Docs/Screenshots/clipboard-history.png` should show
-> Clipboard History search results with text, image preview hover, and ShotFloat
-> image action.
-
-> Screenshot placeholder: `Docs/Screenshots/settings.png` should show the compact
-> settings window with hotkeys, application settings, disk-space settings, and
-> MouseMacro mappings.
-
 ## Install
 
 Build and install the app bundle:
@@ -63,105 +25,22 @@ The installed app is:
 Bryan Tools is designed to run from this installed location. Auto-start also
 targets this path, not a development checkout or `.build` app bundle.
 
-## Run During Development
+## Tools
 
-```sh
-Scripts/run-app.sh
-```
-
-Build only:
-
-```sh
-Scripts/build-app.sh
-```
-
-The generated development bundle is written to:
-
-```text
-.build/Bryan Tools.app
-```
-
-## Update
-
-From an existing checkout:
-
-```sh
-Scripts/update.sh
-```
-
-The update script refuses to run with local checkout changes, pulls with
-`--ff-only`, runs self-tests, quits any running Bryan Tools instance, installs
-the app, and relaunches it. Set `LAUNCH_APP=0` to skip relaunch.
-
-The app also exposes an **Update Now** button in Settings. That button resolves
-the BryanTools source checkout, validates that it is the expected SwiftPM app,
-and runs `Scripts/update.sh`.
-
-## Test
-
-Bryan Tools uses a framework-free self-test runner so it can run with the local
-Command Line Tools install:
-
-```sh
-Scripts/test.sh
-```
-
-## Permissions
-
-macOS permissions are granted to the installed app bundle id:
-
-```text
-com.local.BryanTools
-```
-
-Expected permissions:
-
-- Accessibility: required for automatic paste, MacroText expansion, global mouse
-  macro capture, and synthetic key events.
-- Screen Recording: required for Color Picker, ShotFloat, and Screen OCR.
-- Input Monitoring may be requested by macOS for low-level input hooks depending
-  on system version and security settings.
-
-If permissions behave unexpectedly, confirm they are granted to
-`/Applications/Bryan Tools.app`, then quit and relaunch the app.
-
-## Auto Start
-
-Auto-start is enabled by default. On launch, Bryan Tools writes a user
-LaunchAgent:
-
-```text
-~/Library/LaunchAgents/com.local.BryanTools.autostart.plist
-```
-
-The LaunchAgent opens:
-
-```text
-/Applications/Bryan Tools.app
-```
-
-Disable it from Settings under **Application -> Auto Start**. When disabled, the
-LaunchAgent is removed and Bryan Tools will not start automatically after login
-or restart.
-
-## Architecture
-
-Bryan Tools has a shared app shell and independent tool modules.
-
-- `BryanToolsApp` owns the macOS lifecycle.
-- `BryanToolsEnvironment` wires tools together, starts and stops modules, and
-  opens the shared Settings window.
-- Each tool implements `ToolModule` and owns its own UI, settings, state, and
-  hotkeys.
-- Shared services live in `BryanToolsShared` for cross-cutting behavior such as
-  hotkeys, app support paths, pasteboard suppression, calendar formatting,
-  disk-space storage, OCR text formatting, and updater resolution.
-- Clipboard-specific storage, migration, privacy filtering, search, and
-  pasteboard archive logic live in `ClipboardHistoryCore`.
-
-Tool UIs should remain independent. If future tools need coordination, they
-should communicate through explicit shared services rather than direct
-tool-to-tool calls.
+| Tool | Default shortcut | Purpose |
+| --- | --- | --- |
+| TrayCal | Menu bar date label | Calendar popover, app settings, and quit control |
+| Disk Space Monitor | Menu bar free-space label | Primary-drive free-space sampling and trend chart |
+| UTC Hour | Menu bar UTC hour label | UTC-to-Pacific hour lookup table |
+| Vehicle Motion Cues | TrayCal footer toggle | One-click on/off control for macOS Vehicle Motion Cues |
+| Clipboard History | `Shift-Command-V` | Search, restore, delete, and float clipboard clips |
+| Paste Plain Text | `Shift-Option-Command-V` | Paste current clipboard text without formatting |
+| Color Picker | `Shift-Command-~` | Pick any screen pixel color as a hex value |
+| MacroText | `Shift-Command-/` | Configure global slash-command text replacements |
+| QuickTask | `Command-Space`, fallback `Option-Space` | App launcher, calculator, and command runner |
+| ShotFloat | `Shift-Command-2` | Capture a screen region into an always-on-top floating image |
+| Screen OCR | `Shift-Command-Y` | OCR a selected screen region into the clipboard |
+| MouseMacro | Settings UI | Map mouse buttons to keyboard macro sequences |
 
 ## TrayCal
 
@@ -558,6 +437,25 @@ Settings are opened from the TrayCal gear button. The settings window contains:
 - MouseMacro mapping controls.
 - Status messages for tool-specific errors.
 
+## Architecture
+
+Bryan Tools has a shared app shell and independent tool modules.
+
+- `BryanToolsApp` owns the macOS lifecycle.
+- `BryanToolsEnvironment` wires tools together, starts and stops modules, and
+  opens the shared Settings window.
+- Each tool implements `ToolModule` and owns its own UI, settings, state, and
+  hotkeys.
+- Shared services live in `BryanToolsShared` for cross-cutting behavior such as
+  hotkeys, app support paths, pasteboard suppression, calendar formatting,
+  disk-space storage, OCR text formatting, and updater resolution.
+- Clipboard-specific storage, migration, privacy filtering, search, and
+  pasteboard archive logic live in `ClipboardHistoryCore`.
+
+Tool UIs should remain independent. If future tools need coordination, they
+should communicate through explicit shared services rather than direct
+tool-to-tool calls.
+
 ## Data Locations
 
 Clipboard History:
@@ -583,6 +481,87 @@ User preferences:
 ```text
 ~/Library/Preferences/com.local.BryanTools.plist
 ```
+
+## Run During Development
+
+```sh
+Scripts/run-app.sh
+```
+
+Build only:
+
+```sh
+Scripts/build-app.sh
+```
+
+The generated development bundle is written to:
+
+```text
+.build/Bryan Tools.app
+```
+
+## Update
+
+From an existing checkout:
+
+```sh
+Scripts/update.sh
+```
+
+The update script refuses to run with local checkout changes, pulls with
+`--ff-only`, runs self-tests, quits any running Bryan Tools instance, installs
+the app, and relaunches it. Set `LAUNCH_APP=0` to skip relaunch.
+
+The app also exposes an **Update Now** button in Settings. That button resolves
+the BryanTools source checkout, validates that it is the expected SwiftPM app,
+and runs `Scripts/update.sh`.
+
+## Test
+
+Bryan Tools uses a framework-free self-test runner so it can run with the local
+Command Line Tools install:
+
+```sh
+Scripts/test.sh
+```
+
+## Permissions
+
+macOS permissions are granted to the installed app bundle id:
+
+```text
+com.local.BryanTools
+```
+
+Expected permissions:
+
+- Accessibility: required for automatic paste, MacroText expansion, global mouse
+  macro capture, and synthetic key events.
+- Screen Recording: required for Color Picker, ShotFloat, and Screen OCR.
+- Input Monitoring may be requested by macOS for low-level input hooks depending
+  on system version and security settings.
+
+If permissions behave unexpectedly, confirm they are granted to
+`/Applications/Bryan Tools.app`, then quit and relaunch the app.
+
+## Auto Start
+
+Auto-start is enabled by default. On launch, Bryan Tools writes a user
+LaunchAgent:
+
+```text
+~/Library/LaunchAgents/com.local.BryanTools.autostart.plist
+```
+
+The LaunchAgent opens:
+
+```text
+/Applications/Bryan Tools.app
+```
+
+Disable it from Settings under **Application -> Auto Start**. When disabled, the
+LaunchAgent is removed and Bryan Tools will not start automatically after login
+or restart.
 
 ## Package a DMG
 

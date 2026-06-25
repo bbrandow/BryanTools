@@ -82,6 +82,16 @@ final class UTCHourModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
         updateStatusItem()
     }
 
+    func copyUTCToClipboard(_ row: UTCHourRow) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if pasteboard.setString(row.utcTitle, forType: .string) {
+            lastErrorMessage = nil
+        } else {
+            lastErrorMessage = "Unable to copy UTC hour to clipboard"
+        }
+    }
+
     func popoverDidClose(_ notification: Notification) {
         statusItem?.button?.state = .off
     }

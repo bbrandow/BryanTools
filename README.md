@@ -10,9 +10,11 @@ utilities can be added without coupling their interfaces together.
 
 ## Install
 
-Build and install the app bundle:
+Clone the repo, build the app bundle, and install it:
 
 ```sh
+git clone https://github.com/bbrandow/BryanTools.git
+cd BryanTools
 Scripts/install-app.sh
 ```
 
@@ -24,6 +26,12 @@ The installed app is:
 
 Bryan Tools is designed to run from this installed location. Auto-start also
 targets this path, not a development checkout or `.build` app bundle.
+
+Launch the installed app:
+
+```sh
+open "/Applications/Bryan Tools.app"
+```
 
 ## Tools
 

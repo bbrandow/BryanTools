@@ -57,17 +57,25 @@ struct UTCHourPopoverView: View {
     }
 
     private func rowView(_ row: UTCHourRow) -> some View {
-        HStack(spacing: 0) {
-            Text(row.utcTitle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-            Text(row.pacificTitle)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.horizontal, 10)
+        Button {
+            environment.copyUTCToClipboard(row)
+        } label: {
+            HStack(spacing: 0) {
+                Text(row.utcTitle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                Text(row.pacificTitle)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 10)
+            }
+            .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.plain)
         .font(.system(size: 13, weight: row.isCurrentHour ? .semibold : .regular, design: .monospaced))
         .foregroundStyle(row.isCurrentHour ? Color.primary : Color.secondary)
-        .frame(height: 28)
+        .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+        .contentShape(Rectangle())
+        .help("Copy \(row.utcTitle)")
         .background {
             ZStack {
                 if row.isCurrentHour {

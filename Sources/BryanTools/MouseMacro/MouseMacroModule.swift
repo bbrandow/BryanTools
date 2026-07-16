@@ -21,6 +21,14 @@ final class MouseMacroModule: ObservableObject, ToolModule {
     private var preferences: MouseMacroPreferences
     private var eventTap: MouseMacroEventTap?
     private var isRunning = false
+    private lazy var floatingButtonManager = MouseMacroFloatingButtonManager(
+        onTrigger: { [weak self] mappingID in
+            self?.triggerMacro(mappingID: mappingID)
+        },
+        onPositionChange: { [weak self] mappingID, position in
+            self?.updateFloatingButtonPosition(mappingID: mappingID, position: position)
+        }
+    )
 
     private init(preferences: MouseMacroPreferences) {
         self.preferences = preferences
@@ -32,6 +40,7 @@ final class MouseMacroModule: ObservableObject, ToolModule {
         if !mappings.isEmpty {
             startEventTap()
         }
+        syncFloatingButtons()
     }
 
     func stop() {
@@ -39,6 +48,7 @@ final class MouseMacroModule: ObservableObject, ToolModule {
         eventTap?.stop()
         eventTap = nil
         isCapturingButton = false
+        floatingButtonManager.closeAll()
     }
 
     func menuContent() -> AnyView {
@@ -98,7 +108,10 @@ final class MouseMacroModule: ObservableObject, ToolModule {
             guard item.id == mapping.id else {
                 return item
             }
-            return MouseMacroMapping(id: item.id, buttonNumber: buttonNumber, macroText: macroText)
+            var updatedItem = item
+            updatedItem.buttonNumber = buttonNumber
+            updatedItem.macroText = macroText
+            return updatedItem
         }
         persistMappings()
         pendingButtonNumber = nil
@@ -119,6 +132,46 @@ final class MouseMacroModule: ObservableObject, ToolModule {
 
     func triggerMacro(_ mapping: MouseMacroMapping) {
         runMacro(mapping.macroText, sourceButtonNumber: mapping.buttonNumber)
+    }
+
+    func updateFloatingButtonVisibility(_ mapping: MouseMacroMapping, isVisible: Bool) {
+        guard let index = mappings.firstIndex(where: { $0.id == mapping.id }) else {
+            lastErrorMessage = "MouseMacro mapping no longer exists."
+            return
+        }
+        guard mappings[index].floatingButton.isVisible != isVisible else {
+            return
+        }
+
+        mappings[index].floatingButton.isVisible = isVisible
+        persistMappings()
+        lastStatusMessage = isVisible
+            ? "Showing floating button for mouse button \(mapping.buttonNumber)."
+            : "Hid floating button for mouse button \(mapping.buttonNumber)."
+        lastErrorMessage = nil
+    }
+
+    func toggleFloatingButton(_ mapping: MouseMacroMapping) {
+        updateFloatingButtonVisibility(mapping, isVisible: !mapping.floatingButton.isVisible)
+    }
+
+    func updateFloatingButtonEmoji(_ mapping: MouseMacroMapping, emoji: String) {
+        guard let index = mappings.firstIndex(where: { $0.id == mapping.id }) else {
+            lastErrorMessage = "MouseMacro mapping no longer exists."
+            return
+        }
+        guard let normalizedEmoji = validatedEmoji(emoji) else {
+            return
+        }
+        guard mappings[index].floatingButton.emoji != normalizedEmoji else {
+            lastErrorMessage = nil
+            return
+        }
+
+        mappings[index].floatingButton.emoji = normalizedEmoji
+        persistMappings()
+        lastStatusMessage = "Updated floating button for mouse button \(mapping.buttonNumber)."
+        lastErrorMessage = nil
     }
 
     private func startEventTap() {
@@ -182,6 +235,32 @@ final class MouseMacroModule: ObservableObject, ToolModule {
         lastErrorMessage = nil
     }
 
+    private func triggerMacro(mappingID: UUID) {
+        guard let mapping = mappings.first(where: { $0.id == mappingID }) else {
+            return
+        }
+        triggerMacro(mapping)
+    }
+
+    private func updateFloatingButtonPosition(
+        mappingID: UUID,
+        position: MouseMacroFloatingButtonPosition
+    ) {
+        guard let index = mappings.firstIndex(where: { $0.id == mappingID }) else {
+            return
+        }
+        mappings[index].floatingButton.position = position
+        persistMappings()
+    }
+
+    private func validatedEmoji(_ value: String) -> String? {
+        guard let normalizedEmoji = MouseMacroEmoji.normalized(value) else {
+            lastErrorMessage = "Floating button display must be one emoji."
+            return nil
+        }
+        return normalizedEmoji
+    }
+
     private func validate(buttonNumber: Int64, macroText: String, replacing id: UUID?) -> Bool {
         guard buttonNumber >= 0 else {
             lastErrorMessage = "MouseMacro button number is invalid."
@@ -208,6 +287,14 @@ final class MouseMacroModule: ObservableObject, ToolModule {
         }
         preferences.mappings = mappings
         preferences.save()
+        syncFloatingButtons()
+    }
+
+    private func syncFloatingButtons() {
+        guard isRunning else {
+            return
+        }
+        floatingButtonManager.sync(mappings: mappings)
     }
 
     private func post(_ command: MouseMacroKeyCommand) {

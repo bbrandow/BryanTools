@@ -76,6 +76,7 @@ final class BryanToolsEnvironment: ObservableObject {
             }
         )
         trayCal.setVehicleMotionCues(vehicleMotionCues)
+        trayCal.setMouseMacro(mouseMacro)
     }
 
     func start() {

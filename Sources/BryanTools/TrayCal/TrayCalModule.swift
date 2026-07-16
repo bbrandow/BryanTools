@@ -28,6 +28,7 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
     private var showSettingsHandler: ActionHandler?
     private var quitHandler: ActionHandler?
     private var vehicleMotionCues = VehicleMotionCuesModule.shared
+    private var mouseMacro = MouseMacroModule.shared
 
     private override init() {
         let calendar = TrayCalCalendar.defaultCalendar()
@@ -46,6 +47,10 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
 
     func setVehicleMotionCues(_ vehicleMotionCues: VehicleMotionCuesModule) {
         self.vehicleMotionCues = vehicleMotionCues
+    }
+
+    func setMouseMacro(_ mouseMacro: MouseMacroModule) {
+        self.mouseMacro = mouseMacro
     }
 
     func start() {
@@ -196,7 +201,11 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
         popover.contentSize = NSSize(width: 248, height: 314)
         popover.delegate = self
         popover.contentViewController = NSHostingController(
-            rootView: TrayCalPopoverView(environment: self, vehicleMotionCues: vehicleMotionCues)
+            rootView: TrayCalPopoverView(
+                environment: self,
+                vehicleMotionCues: vehicleMotionCues,
+                mouseMacro: mouseMacro
+            )
         )
         return popover
     }

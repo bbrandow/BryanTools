@@ -5,6 +5,7 @@ import SwiftUI
 struct TrayCalPopoverView: View {
     @ObservedObject var environment: TrayCalModule
     @ObservedObject var vehicleMotionCues: VehicleMotionCuesModule
+    @ObservedObject var mouseMacro: MouseMacroModule
     @State private var showingMonthPicker = false
     @State private var editingYear = false
     @State private var yearText = ""
@@ -32,6 +33,10 @@ struct TrayCalPopoverView: View {
                         .help("Quit Bryan Tools")
 
                     motionCuesButton
+
+                    if !mouseMacro.mappings.isEmpty {
+                        floatingButtonsControl
+                    }
                 }
 
                 Spacer()
@@ -112,6 +117,54 @@ struct TrayCalPopoverView: View {
         .disabled(!vehicleMotionCues.snapshot.isSupported)
     }
 
+    @ViewBuilder
+    private var floatingButtonsControl: some View {
+        if let mapping = mouseMacro.mappings.first, mouseMacro.mappings.count == 1 {
+            Button {
+                mouseMacro.toggleFloatingButton(mapping)
+            } label: {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(mapping.floatingButton.isVisible ? Color.accentColor : Color.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(
+                Color(nsColor: .controlBackgroundColor)
+                    .opacity(mapping.floatingButton.isVisible ? 0.95 : 0.7)
+            )
+            .help(mapping.floatingButton.isVisible ? "Hide floating MouseMacro button" : "Show floating MouseMacro button")
+            .accessibilityLabel(
+                Text(mapping.floatingButton.isVisible ? "Hide floating MouseMacro button" : "Show floating MouseMacro button")
+            )
+        } else {
+            Menu {
+                ForEach(mouseMacro.mappings) { mapping in
+                    Button {
+                        mouseMacro.toggleFloatingButton(mapping)
+                    } label: {
+                        if mapping.floatingButton.isVisible {
+                            Label(floatingButtonMenuTitle(mapping), systemImage: "checkmark")
+                        } else {
+                            Text(floatingButtonMenuTitle(mapping))
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(mouseMacro.mappings.contains(where: \.floatingButton.isVisible) ? Color.accentColor : Color.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Show or hide floating MouseMacro buttons")
+        }
+    }
+
     private var motionCuesTint: Color {
         if vehicleMotionCues.lastErrorMessage != nil || !vehicleMotionCues.snapshot.isSupported {
             return .red
@@ -125,6 +178,10 @@ struct TrayCalPopoverView: View {
 
     private var motionCuesAccessibilityLabel: String {
         vehicleMotionCues.lastErrorMessage ?? VehicleMotionCuesDisplay.accessibilityLabel(for: vehicleMotionCues.snapshot)
+    }
+
+    private func floatingButtonMenuTitle(_ mapping: MouseMacroMapping) -> String {
+        "\(mapping.floatingButton.emoji)  Button \(mapping.buttonNumber): \(mapping.macroText)"
     }
 
     private var monthPicker: some View {

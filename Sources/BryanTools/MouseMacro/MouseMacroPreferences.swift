@@ -1,3 +1,4 @@
+import BryanToolsShared
 import Foundation
 
 struct MouseMacroPreferences: Equatable {

@@ -552,7 +552,9 @@ private struct MouseMacroCompactSettingsView: View {
                 .controlSize(.small)
                 .disabled(selectedButtonNumber == nil || macroText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                if editingMapping != nil || selectedButtonNumber != nil || macroText != MouseMacroPreferences.defaultMacroText {
+                if editingMapping != nil
+                    || selectedButtonNumber != nil
+                    || macroText != MouseMacroPreferences.defaultMacroText {
                     Button {
                         resetEditor()
                     } label: {
@@ -574,6 +576,12 @@ private struct MouseMacroCompactSettingsView: View {
                             isEditing: editingMapping?.id == mapping.id,
                             trigger: {
                                 environment.triggerMacro(mapping)
+                            },
+                            setFloatingVisible: { isVisible in
+                                environment.updateFloatingButtonVisibility(mapping, isVisible: isVisible)
+                            },
+                            setEmoji: { emoji in
+                                environment.updateFloatingButtonEmoji(mapping, emoji: emoji)
                             },
                             edit: {
                                 edit(mapping)
@@ -651,8 +659,11 @@ private struct MouseMacroMappingRow: View {
     let mapping: MouseMacroMapping
     let isEditing: Bool
     let trigger: () -> Void
+    let setFloatingVisible: (Bool) -> Void
+    let setEmoji: (String) -> Void
     let edit: () -> Void
     let delete: () -> Void
+    @State private var showingEmojiPicker = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -666,6 +677,40 @@ private struct MouseMacroMappingRow: View {
                 .truncationMode(.middle)
 
             Spacer()
+
+            Button {
+                showingEmojiPicker.toggle()
+            } label: {
+                Text(mapping.floatingButton.emoji)
+                    .font(.system(size: 18))
+                    .frame(width: 28, height: 28)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.75))
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Change floating button emoji")
+            .popover(isPresented: $showingEmojiPicker, arrowEdge: .top) {
+                MouseMacroEmojiPicker(
+                    selectedEmoji: mapping.floatingButton.emoji,
+                    select: { emoji in
+                        setEmoji(emoji)
+                        showingEmojiPicker = false
+                    }
+                )
+            }
+
+            Toggle(
+                "Floating",
+                isOn: Binding(
+                    get: { mapping.floatingButton.isVisible },
+                    set: setFloatingVisible
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .help(mapping.floatingButton.isVisible ? "Hide floating button" : "Show floating button")
 
             Button {
                 trigger()
@@ -695,4 +740,76 @@ private struct MouseMacroMappingRow: View {
         .padding(.vertical, 8)
         .background(isEditing ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor).opacity(0.45))
     }
+}
+
+private struct MouseMacroEmojiPicker: View {
+    let selectedEmoji: String
+    let select: (String) -> Void
+
+    @State private var customEmoji = ""
+    @FocusState private var customEmojiFocused: Bool
+
+    private let columns = Array(repeating: GridItem(.fixed(32), spacing: 4), count: 6)
+
+    var body: some View {
+        VStack(spacing: 8) {
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(Self.emojiOptions, id: \.self) { emoji in
+                    Button {
+                        select(emoji)
+                    } label: {
+                        Text(emoji)
+                            .font(.system(size: 20))
+                            .frame(width: 32, height: 32)
+                            .background {
+                                if emoji == selectedEmoji {
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .fill(Color.accentColor.opacity(0.18))
+                                }
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 6) {
+                TextField("Emoji", text: $customEmoji)
+                    .font(.system(size: 20))
+                    .multilineTextAlignment(.center)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 54)
+                    .focused($customEmojiFocused)
+                    .onChange(of: customEmoji) { _, value in
+                        if let emoji = MouseMacroEmoji.normalized(value) {
+                            select(emoji)
+                        }
+                    }
+
+                Button {
+                    customEmoji = ""
+                    customEmojiFocused = true
+                    DispatchQueue.main.async {
+                        NSApp.orderFrontCharacterPalette(nil)
+                    }
+                } label: {
+                    Label("More Emoji", systemImage: "face.smiling")
+                }
+                .labelStyle(.iconOnly)
+                .help("Open Character Viewer")
+            }
+        }
+        .padding(10)
+        .frame(width: 226)
+    }
+
+    private static let emojiOptions = [
+        "📷", "📸", "🖼️", "✂️", "📋", "📝",
+        "🔍", "⚡️", "✨", "🚀", "💡", "🛠️",
+        "⚙️", "✅", "▶️", "⏺️", "🔴", "🟢",
+        "🔵", "🟡", "🟣", "🟠", "⭐️", "❤️",
+        "👍", "👆", "🖱️", "⌨️", "☀️", "🌙"
+    ]
 }

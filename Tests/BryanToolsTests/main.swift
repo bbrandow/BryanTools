@@ -612,6 +612,63 @@ private func testMouseMacroCommandParser() throws {
     )
 }
 
+private func testMouseMacroLegacyMappingDecoding() throws {
+    let id = UUID()
+    let data = Data(
+        """
+        {
+          "id": "\(id.uuidString)",
+          "buttonNumber": 6,
+          "macroText": "cmd+shift+ctrl+4"
+        }
+        """.utf8
+    )
+    let mapping = try JSONDecoder().decode(MouseMacroMapping.self, from: data)
+
+    try expect(mapping.id == id, "Expected legacy MouseMacro mapping id to decode")
+    try expect(mapping.buttonNumber == 6, "Expected legacy MouseMacro button number to decode")
+    try expect(!mapping.floatingButton.isVisible, "Expected legacy MouseMacro floating button to default hidden")
+    try expect(
+        mapping.floatingButton.emoji == MouseMacroFloatingButtonConfiguration.defaultEmoji,
+        "Expected legacy MouseMacro floating button to use the default emoji"
+    )
+    try expect(mapping.floatingButton.position == nil, "Expected legacy MouseMacro mapping to have no saved position")
+}
+
+private func testMouseMacroFloatingButtonRoundTrip() throws {
+    let mapping = MouseMacroMapping(
+        buttonNumber: 6,
+        macroText: "cmd+shift+ctrl+4",
+        floatingButton: MouseMacroFloatingButtonConfiguration(
+            isVisible: true,
+            emoji: "🖼️",
+            position: MouseMacroFloatingButtonPosition(x: 123.5, y: 456.75)
+        )
+    )
+
+    let data = try JSONEncoder().encode(mapping)
+    let decoded = try JSONDecoder().decode(MouseMacroMapping.self, from: data)
+    try expect(decoded == mapping, "Expected MouseMacro floating button configuration to round trip")
+}
+
+private func testMouseMacroEmojiValidation() throws {
+    try expect(MouseMacroEmoji.normalized(" 📷 ") == "📷", "Expected surrounding whitespace to be trimmed")
+    try expect(MouseMacroEmoji.normalized("👨🏽‍💻") == "👨🏽‍💻", "Expected a composed emoji to be accepted")
+    try expect(MouseMacroEmoji.normalized("☀") == "☀", "Expected a text-default emoji to be accepted")
+    try expect(MouseMacroEmoji.normalized("A") == nil, "Expected non-emoji text to be rejected")
+    try expect(MouseMacroEmoji.normalized("📷📸") == nil, "Expected multiple emoji to be rejected")
+}
+
+private func testMouseMacroFloatingButtonDefaults() throws {
+    let mapping = MouseMacroMapping(buttonNumber: 6, macroText: "cmd+shift+ctrl+4")
+    try expect(!mapping.floatingButton.isVisible, "Expected floating MouseMacro buttons to default off")
+    try expect(
+        mapping.floatingButton.emoji == MouseMacroFloatingButtonConfiguration.defaultEmoji,
+        "Expected the camera emoji as the default floating button display"
+    )
+    try expect(mapping.floatingButton.position == nil, "Expected no default floating button position")
+}
+
 private func createValidUpdaterSourceRoot(_ sourceRoot: URL) throws {
     let scriptsDirectory = sourceRoot.appendingPathComponent("Scripts", isDirectory: true)
     let appDirectory = sourceRoot.appendingPathComponent("Sources/BryanTools/App", isDirectory: true)
@@ -1328,6 +1385,10 @@ private let tests: [(String, () throws -> Void)] = [
     ("QuickTask default hotkey", testQuickTaskDefaultHotKey),
     ("QuickTask command line prefix", testQuickTaskCommandLinePrefix),
     ("MouseMacro command parser", testMouseMacroCommandParser),
+    ("MouseMacro legacy mapping decode", testMouseMacroLegacyMappingDecoding),
+    ("MouseMacro floating button round trip", testMouseMacroFloatingButtonRoundTrip),
+    ("MouseMacro emoji validation", testMouseMacroEmojiValidation),
+    ("MouseMacro floating button defaults", testMouseMacroFloatingButtonDefaults),
     ("Bryan Tools update script resolver", testBryanToolsUpdateScriptResolver),
     ("Bryan Tools auto start defaults", testBryanToolsAutoStartDefaultsAndLaunchAgent),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),

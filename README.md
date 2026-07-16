@@ -72,6 +72,9 @@ Features:
 - Editable year field.
 - Gear button to open Bryan Tools Settings.
 - Power button to quit Bryan Tools.
+- MouseMacro floating-button control. A single mapping uses the grid icon as a
+  direct toggle; multiple mappings use the same icon as a menu with individual
+  visibility toggles.
 - Calendar view resets to today after the popover has been closed for two
   minutes.
 
@@ -414,6 +417,12 @@ Features:
 - Capture the next mouse button.
 - Add multiple mappings.
 - Edit and delete mappings.
+- Optionally show a 57x57 always-on-top button for any mapping.
+- Configure each floating button with a system emoji.
+- Click a floating button to run its macro, or drag it to save a new position.
+- Show or hide floating buttons from either MouseMacro Settings or TrayCal.
+- Restore visible floating buttons and their positions after Bryan Tools
+  relaunches.
 - Map a button to a macro string such as:
 
 ```text

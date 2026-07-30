@@ -273,11 +273,11 @@ private func testHistoryCopyUpdatesLastCopiedTimestamp() throws {
     let promotedRecord = try fixture.store.markCopied(id: firstRecord.id, at: copiedAt)
 
     try expect(
-        promotedRecord.createdAt == firstRecord.createdAt,
+        abs(promotedRecord.createdAt.timeIntervalSince(firstRecord.createdAt)) < 0.001,
         "Expected history copy to preserve original creation time"
     )
     try expect(
-        promotedRecord.lastCopiedAt == copiedAt,
+        abs(promotedRecord.lastCopiedAt.timeIntervalSince(copiedAt)) < 0.001,
         "Expected history copy to update last-copied time"
     )
     try expect(

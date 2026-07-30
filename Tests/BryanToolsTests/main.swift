@@ -4,6 +4,7 @@ import Carbon
 import ClipboardHistoryCore
 import Darwin
 import Foundation
+import SQLite3
 
 private struct TestFailure: Error, CustomStringConvertible {
     let description: String
@@ -248,6 +249,239 @@ private func testDuplicateCopyMovesExistingRecordToTop() throws {
     try expect(try fixture.store.search().count == 2, "Expected duplicate refresh not to create a new record")
 }
 
+private func testHistoryCopyUpdatesLastCopiedTimestamp() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    let baseDate = Date(timeIntervalSinceNow: -120)
+    let firstRecord = try require(
+        try fixture.store.insert(
+            capturedString("selected from history"),
+            createdAt: baseDate
+        ),
+        "Expected history selection record"
+    )
+    let newerRecord = try require(
+        try fixture.store.insert(
+            capturedString("newer clipboard value"),
+            createdAt: baseDate.addingTimeInterval(30)
+        ),
+        "Expected newer clipboard record"
+    )
+
+    let copiedAt = baseDate.addingTimeInterval(60)
+    let promotedRecord = try fixture.store.markCopied(id: firstRecord.id, at: copiedAt)
+
+    try expect(
+        promotedRecord.createdAt == firstRecord.createdAt,
+        "Expected history copy to preserve original creation time"
+    )
+    try expect(
+        promotedRecord.lastCopiedAt == copiedAt,
+        "Expected history copy to update last-copied time"
+    )
+    try expect(
+        try fixture.store.search().map(\.id) == [firstRecord.id, newerRecord.id],
+        "Expected a history copy to promote the selected record"
+    )
+}
+
+private func testGoogleSheetsPayloadVariantsShareOneHistoryItem() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    func spreadsheetClip(htmlPadding: Int, sourceURL: String) throws -> CapturedClip {
+        let pasteboard = namedPasteboard()
+        pasteboard.clearContents()
+        let item = NSPasteboardItem()
+        item.setData(
+            Data(("<table><tr><td>386061</td></tr></table>" + String(repeating: " ", count: htmlPadding)).utf8),
+            forType: NSPasteboard.PasteboardType("public.html")
+        )
+        item.setString(
+            "386061",
+            forType: NSPasteboard.PasteboardType("public.utf8-plain-text")
+        )
+        item.setString(
+            sourceURL,
+            forType: NSPasteboard.PasteboardType("org.chromium.source-url")
+        )
+        try requirePasteboardWrite(pasteboard.writeObjects([item]))
+        return try require(
+            PasteboardArchiver.capture(
+                from: pasteboard,
+                sourceApplicationInfo: nil,
+                maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+                maxEventBytes: ClipStore.defaultMaxEventBytes
+            ),
+            "Expected Google Sheets-style clipboard payload"
+        )
+    }
+
+    let baseDate = Date(timeIntervalSinceNow: -60)
+    let richRecord = try require(
+        try fixture.store.insert(
+            spreadsheetClip(
+                htmlPadding: 600,
+                sourceURL: "https://docs.google.com/spreadsheets/d/rich"
+            ),
+            createdAt: baseDate
+        ),
+        "Expected rich Google Sheets record"
+    )
+    let duplicateRecord = try require(
+        try fixture.store.insert(
+            spreadsheetClip(
+                htmlPadding: 0,
+                sourceURL: "https://docs.google.com/spreadsheets/d/lean"
+            ),
+            createdAt: baseDate.addingTimeInterval(30)
+        ),
+        "Expected duplicate Google Sheets record refresh"
+    )
+
+    try expect(
+        duplicateRecord.id == richRecord.id,
+        "Expected Google Sheets payload variants to reuse the richer record"
+    )
+    try expect(
+        try fixture.store.search().map(\.id) == [richRecord.id],
+        "Expected one visible history item for equivalent Google Sheets cell text"
+    )
+}
+
+private func testClipboardSearchCanBeCancelled() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    _ = try fixture.store.insert(capturedString("cancel this search"))
+    do {
+        _ = try fixture.store.search("cancel", shouldCancel: { true })
+        throw TestFailure(description: "Expected cancelled clipboard search to stop")
+    } catch is CancellationError {
+        // Expected.
+    }
+}
+
+private func testSemanticTextDuplicateMovesExistingRecordToTop() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    let baseDate = Date(timeIntervalSinceNow: -60)
+    let firstPasteboard = namedPasteboard()
+    firstPasteboard.clearContents()
+    let firstItem = NSPasteboardItem()
+    firstItem.setString("same visible cell text", forType: .string)
+    firstItem.setData(
+        Data("<span style=\"color:red\">same visible cell text</span>".utf8),
+        forType: NSPasteboard.PasteboardType("public.html")
+    )
+    try requirePasteboardWrite(firstPasteboard.writeObjects([firstItem]))
+    let firstClip = try require(
+        PasteboardArchiver.capture(
+            from: firstPasteboard,
+            sourceApplicationInfo: nil,
+            maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+            maxEventBytes: ClipStore.defaultMaxEventBytes
+        ),
+        "Expected first formatted text capture"
+    )
+    let firstRecord = try require(
+        try fixture.store.insert(firstClip, createdAt: baseDate),
+        "Expected first formatted text record"
+    )
+
+    let newerRecord = try require(
+        try fixture.store.insert(
+            capturedString("newer clipboard item"),
+            createdAt: baseDate.addingTimeInterval(20)
+        ),
+        "Expected newer clipboard record"
+    )
+
+    let secondPasteboard = namedPasteboard()
+    secondPasteboard.clearContents()
+    let secondItem = NSPasteboardItem()
+    secondItem.setString("same visible cell text", forType: .string)
+    secondItem.setData(
+        Data("<table><tr><td><strong>same visible cell text</strong></td></tr></table>".utf8),
+        forType: NSPasteboard.PasteboardType("public.html")
+    )
+    secondItem.setData(
+        Data("metadata".utf8),
+        forType: NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")
+    )
+    try requirePasteboardWrite(secondPasteboard.writeObjects([secondItem]))
+    let secondClip = try require(
+        PasteboardArchiver.capture(
+            from: secondPasteboard,
+            sourceApplicationInfo: PasteboardSourceApplication(
+                bundleIdentifier: "com.google.Chrome",
+                localizedName: "Google Chrome"
+            ),
+            maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+            maxEventBytes: ClipStore.defaultMaxEventBytes
+        ),
+        "Expected second formatted text capture"
+    )
+    let refreshedRecord = try require(
+        try fixture.store.insert(secondClip, createdAt: baseDate.addingTimeInterval(40)),
+        "Expected semantic duplicate refresh"
+    )
+
+    try expect(refreshedRecord.id == firstRecord.id, "Expected semantic text duplicate to reuse the original record")
+    try expect(
+        try fixture.store.search().map(\.id) == [firstRecord.id, newerRecord.id],
+        "Expected semantic text duplicate to move the original record to the top"
+    )
+    try expect(try fixture.store.search().count == 2, "Expected semantic duplicate not to create a new record")
+}
+
+private func testCanonicalTextHashMigratesExistingDatabase() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("BryanToolsLegacyClipStore-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+    let databaseURL = directory.appendingPathComponent("ClipMan.sqlite")
+    var database: OpaquePointer?
+    guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK, let database else {
+        throw TestFailure(description: "Expected legacy clipboard database to open")
+    }
+    let legacySchema = """
+    CREATE TABLE clips (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at REAL NOT NULL,
+        item_count INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        primary_kind TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        searchable_text TEXT NOT NULL,
+        type_identifiers TEXT NOT NULL,
+        byte_count INTEGER NOT NULL,
+        thumbnail_path TEXT
+    );
+    """
+    let schemaResult = sqlite3_exec(database, legacySchema, nil, nil, nil)
+    sqlite3_close(database)
+    try expect(schemaResult == SQLITE_OK, "Expected legacy clipboard schema creation")
+
+    let store = try ClipStore(
+        rootDirectory: directory,
+        encryptionKeyData: ClipStoreEncryptionKey.deterministicTestKey()
+    )
+    let pasteboard = namedPasteboard()
+    try writeString("captured after schema migration", to: pasteboard)
+    let record = try require(
+        try store.captureCurrentPasteboard(pasteboard),
+        "Expected capture after canonical text hash migration"
+    )
+    try expect(
+        try store.search().map(\.id) == [record.id],
+        "Expected migrated clipboard database to store and query text"
+    )
+}
+
 private func testRichRepresentationsAreSerializedAndSearchable() throws {
     let fixture = try Fixture()
     defer { fixture.cleanup() }
@@ -352,6 +586,58 @@ private func testOnePasswordAppSourceIsSkipped() throws {
         maxEventBytes: ClipStore.defaultMaxEventBytes
     )
     try expect(captured == nil, "Expected 1Password app source to be skipped")
+}
+
+private func testGoogleSheetsAutoGeneratedCellIsCaptured() throws {
+    let pasteboard = namedPasteboard()
+    pasteboard.clearContents()
+
+    let item = NSPasteboardItem()
+    item.setString("Quarterly Revenue", forType: .string)
+    item.setData(
+        Data("<table><tr><td>Quarterly Revenue</td></tr></table>".utf8),
+        forType: NSPasteboard.PasteboardType("public.html")
+    )
+    item.setData(
+        Data("metadata".utf8),
+        forType: NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")
+    )
+    try requirePasteboardWrite(pasteboard.writeObjects([item]))
+
+    let captured = PasteboardArchiver.capture(
+        from: pasteboard,
+        sourceApplicationInfo: PasteboardSourceApplication(
+            bundleIdentifier: "com.google.Chrome",
+            localizedName: "Google Chrome"
+        ),
+        maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+        maxEventBytes: ClipStore.defaultMaxEventBytes
+    )
+    try expect(captured != nil, "Expected Google Sheets-style cell data to be captured")
+}
+
+private func testAutoGeneratedBrowserPassphraseIsSkipped() throws {
+    let pasteboard = namedPasteboard()
+    pasteboard.clearContents()
+
+    let item = NSPasteboardItem()
+    item.setString("correct horse battery staple", forType: .string)
+    item.setData(
+        Data("metadata".utf8),
+        forType: NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")
+    )
+    try requirePasteboardWrite(pasteboard.writeObjects([item]))
+
+    let captured = PasteboardArchiver.capture(
+        from: pasteboard,
+        sourceApplicationInfo: PasteboardSourceApplication(
+            bundleIdentifier: "com.google.Chrome",
+            localizedName: "Google Chrome"
+        ),
+        maxRepresentationBytes: ClipStore.defaultMaxRepresentationBytes,
+        maxEventBytes: ClipStore.defaultMaxEventBytes
+    )
+    try expect(captured == nil, "Expected a non-spreadsheet auto-generated browser copy to remain private")
 }
 
 private func testChromeSecretShapedTextIsSkippedWithoutMarker() throws {
@@ -1361,10 +1647,17 @@ private let tests: [(String, () throws -> Void)] = [
     ("90-day retention purge", testRetentionPurgeRemovesOldItems),
     ("immediate duplicate refresh", testImmediateDuplicateRefreshesExistingRecord),
     ("duplicate copy moves existing record to top", testDuplicateCopyMovesExistingRecordToTop),
+    ("history copy updates last-copied timestamp", testHistoryCopyUpdatesLastCopiedTimestamp),
+    ("Google Sheets payload variants share history item", testGoogleSheetsPayloadVariantsShareOneHistoryItem),
+    ("clipboard search cancellation", testClipboardSearchCanBeCancelled),
+    ("semantic text duplicate moves existing record to top", testSemanticTextDuplicateMovesExistingRecordToTop),
+    ("canonical text hash existing database migration", testCanonicalTextHashMigratesExistingDatabase),
     ("rich representation serialization/search", testRichRepresentationsAreSerializedAndSearchable),
     ("named pasteboard restore round trip", testRestoreRoundTripUsesNamedPasteboard),
     ("1Password pasteboard marker skip", testOnePasswordMarkerIsSkipped),
     ("1Password app source skip", testOnePasswordAppSourceIsSkipped),
+    ("Google Sheets auto-generated cell capture", testGoogleSheetsAutoGeneratedCellIsCaptured),
+    ("auto-generated browser passphrase skip", testAutoGeneratedBrowserPassphraseIsSkipped),
     ("Chrome secret-shaped text skip", testChromeSecretShapedTextIsSkippedWithoutMarker),
     ("Chrome short password skip", testChromeShortPasswordIsSkippedWithoutMarker),
     ("Chrome memorable password skip", testChromeMemorablePasswordIsSkippedWithoutMarker),

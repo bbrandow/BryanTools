@@ -123,6 +123,10 @@ public enum PasteboardArchiver {
 
         return CapturedClip(
             contentHash: contentHash(for: representations),
+            canonicalTextHash: canonicalTextHash(
+                for: representations,
+                primaryKind: primaryKind
+            ),
             itemCount: items.count,
             primaryKind: primaryKind,
             summary: summary,
@@ -311,6 +315,84 @@ public enum PasteboardArchiver {
             hasher.update(data: representation.data)
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func canonicalTextHash(
+        for representations: [CapturedRepresentation],
+        primaryKind: ClipPrimaryKind
+    ) -> String? {
+        guard primaryKind == .text || primaryKind == .richText || primaryKind == .mixed,
+              !representations.contains(where: hasNonTextSemanticContent) else {
+            return nil
+        }
+
+        let grouped = Dictionary(grouping: representations, by: \.itemIndex)
+        var itemTexts: [String] = []
+
+        for itemIndex in grouped.keys.sorted() {
+            let itemRepresentations = grouped[itemIndex, default: []].sorted {
+                textRepresentationPriority($0.typeIdentifier) < textRepresentationPriority($1.typeIdentifier)
+            }
+            if let text = itemRepresentations.lazy.compactMap(textValue(from:)).first {
+                itemTexts.append(text)
+            }
+        }
+
+        guard !itemTexts.isEmpty else {
+            return nil
+        }
+
+        var hasher = SHA256()
+        hasher.update(data: Data("canonical-text-v1".utf8))
+        for text in itemTexts {
+            let data = Data(text.utf8)
+            hasher.update(data: Data(":\(data.count):".utf8))
+            hasher.update(data: data)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func hasNonTextSemanticContent(_ representation: CapturedRepresentation) -> Bool {
+        let normalized = representation.typeIdentifier.lowercased()
+        if normalized == "public.file-url" || normalized.contains("file-url") {
+            return true
+        }
+        if normalized == "public.url" || normalized.hasSuffix(".url") {
+            return true
+        }
+        if let type = UTType(representation.typeIdentifier), type.conforms(to: .image) {
+            return true
+        }
+        return false
+    }
+
+    private static func textRepresentationPriority(_ typeIdentifier: String) -> Int {
+        let normalized = typeIdentifier.lowercased()
+        if isPlainTextType(normalized) {
+            return 0
+        }
+        if normalized.contains("html") {
+            return 1
+        }
+        if normalized.contains("rtf") {
+            return 2
+        }
+        return 3
+    }
+
+    private static func textValue(from representation: CapturedRepresentation) -> String? {
+        let normalized = representation.typeIdentifier.lowercased()
+        if isPlainTextType(normalized) {
+            return String(data: representation.data, encoding: .utf8)
+                ?? String(data: representation.data, encoding: .utf16)
+        }
+        if normalized.contains("html") {
+            return attributedString(from: representation.data, documentType: .html)
+        }
+        if normalized.contains("rtf") {
+            return attributedString(from: representation.data, documentType: .rtf)
+        }
+        return nil
     }
 
     public static func makeThumbnailPNG(

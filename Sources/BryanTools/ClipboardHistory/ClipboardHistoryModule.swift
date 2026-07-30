@@ -4,6 +4,43 @@ import ClipboardHistoryCore
 import Foundation
 import SwiftUI
 
+private final class ClipboardSearchCancellationToken: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var isCancelled: Bool {
+        lock.withLock { cancelled }
+    }
+
+    func cancel() {
+        lock.withLock {
+            cancelled = true
+        }
+    }
+}
+
+private final class ClipboardSearchRequest: @unchecked Sendable {
+    let store: ClipStore
+    let query: String
+    let token: ClipboardSearchCancellationToken
+
+    init(store: ClipStore, query: String, token: ClipboardSearchCancellationToken) {
+        self.store = store
+        self.query = query
+        self.token = token
+    }
+
+    func execute() -> Result<[ClipRecord], Error> {
+        do {
+            return .success(
+                try store.search(query, shouldCancel: { token.isCancelled })
+            )
+        } catch {
+            return .failure(error)
+        }
+    }
+}
+
 @MainActor
 final class ClipboardHistoryModule: ObservableObject, ToolModule {
     static let shared = ClipboardHistoryModule.makeShared()
@@ -14,7 +51,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
 
     @Published var searchQuery = "" {
         didSet {
-            refreshSearch()
+            scheduleSearch(debounced: true)
         }
     }
 
@@ -45,6 +82,13 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
     private var appToRestoreFocus: NSRunningApplication?
     private var searchClearWorkItem: DispatchWorkItem?
     private var searchClearToken: UUID?
+    private let searchQueue = DispatchQueue(
+        label: "com.local.BryanTools.clipboard-search",
+        qos: .userInitiated
+    )
+    private var searchDebounceWorkItem: DispatchWorkItem?
+    private var searchCancellationToken: ClipboardSearchCancellationToken?
+    private var searchGeneration = 0
     private var thumbnailImageCache: [UUID: NSImage] = [:]
     private var thumbnailMisses = Set<UUID>()
 
@@ -73,6 +117,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
 
     func stop() {
         isRunning = false
+        cancelPendingSearch()
         monitor?.stop()
         monitor = nil
         hotKeyController.unregisterAll()
@@ -256,6 +301,8 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         do {
             try store.restoreClip(id: record.id, to: .general)
             monitor?.noteInternalPasteboardWrite()
+            try store.markCopied(id: record.id)
+            refreshSearch()
             closeHistory()
         } catch {
             lastErrorMessage = error.localizedDescription
@@ -369,12 +416,7 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
     }
 
     func refreshSearch() {
-        do {
-            searchResults = try store.search(searchQuery)
-            pruneThumbnailCache(to: searchResults)
-        } catch {
-            lastErrorMessage = error.localizedDescription
-        }
+        scheduleSearch(debounced: false)
     }
 
     func thumbnailImage(for record: ClipRecord) -> NSImage? {
@@ -435,6 +477,82 @@ final class ClipboardHistoryModule: ObservableObject, ToolModule {
         } catch {
             lastErrorMessage = error.localizedDescription
         }
+    }
+
+    private func scheduleSearch(debounced: Bool) {
+        searchDebounceWorkItem?.cancel()
+        searchCancellationToken?.cancel()
+        searchGeneration += 1
+
+        let generation = searchGeneration
+        let query = searchQuery
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.beginSearch(query: query, generation: generation)
+        }
+        searchDebounceWorkItem = workItem
+
+        if debounced {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
+        } else {
+            DispatchQueue.main.async(execute: workItem)
+        }
+    }
+
+    private func beginSearch(query: String, generation: Int) {
+        guard generation == searchGeneration else {
+            return
+        }
+        searchDebounceWorkItem = nil
+
+        let token = ClipboardSearchCancellationToken()
+        searchCancellationToken = token
+        let request = ClipboardSearchRequest(store: store, query: query, token: token)
+
+        searchQueue.async { [weak self] in
+            let result = request.execute()
+
+            DispatchQueue.main.async {
+                self?.applySearchResult(
+                    result,
+                    query: query,
+                    generation: generation,
+                    token: token
+                )
+            }
+        }
+    }
+
+    private func applySearchResult(
+        _ result: Result<[ClipRecord], Error>,
+        query: String,
+        generation: Int,
+        token: ClipboardSearchCancellationToken
+    ) {
+        guard generation == searchGeneration,
+              query == searchQuery,
+              searchCancellationToken === token,
+              !token.isCancelled else {
+            return
+        }
+        searchCancellationToken = nil
+
+        switch result {
+        case let .success(records):
+            searchResults = records
+            pruneThumbnailCache(to: records)
+        case let .failure(error):
+            if !(error is CancellationError) {
+                lastErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func cancelPendingSearch() {
+        searchDebounceWorkItem?.cancel()
+        searchDebounceWorkItem = nil
+        searchCancellationToken?.cancel()
+        searchCancellationToken = nil
+        searchGeneration += 1
     }
 
     private func restoreOriginalClipboardAfterPlainTextPaste(

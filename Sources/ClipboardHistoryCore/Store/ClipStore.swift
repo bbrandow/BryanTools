@@ -17,8 +17,11 @@ public final class ClipStore {
     private let maxEventBytes: Int
     private let retentionDays: Int
     private let cipher: ClipStoreCipher
-    private let jsonEncoder = JSONEncoder()
-    private let jsonDecoder = JSONDecoder()
+    private static let recordColumns = """
+        id, created_at, COALESCE(last_copied_at, created_at), item_count, content_hash,
+        canonical_text_hash, primary_kind, summary, searchable_text, type_identifiers,
+        byte_count, thumbnail_path
+        """
 
     private struct RawClipRow {
         let id: UUID
@@ -77,7 +80,22 @@ public final class ClipStore {
 
     @discardableResult
     public func insert(_ captured: CapturedClip, createdAt: Date = Date()) throws -> ClipRecord? {
+        if let canonicalTextHash = captured.canonicalTextHash {
+            let duplicates = try semanticDuplicateRecords(
+                canonicalTextHash: canonicalTextHash,
+                summary: captured.summary
+            )
+            if let existingRecord = preferredSemanticDuplicate(from: duplicates) {
+                try touchClip(id: existingRecord.id, at: createdAt)
+                try purgeExpired()
+                return try record(id: existingRecord.id)
+            }
+        }
+
         if let existingRecord = try record(contentHash: captured.contentHash) {
+            if let canonicalTextHash = captured.canonicalTextHash {
+                try updateCanonicalTextHash(id: existingRecord.id, canonicalTextHash: canonicalTextHash)
+            }
             try touchClip(id: existingRecord.id, at: createdAt)
             try purgeExpired()
             return try record(id: existingRecord.id)
@@ -116,8 +134,10 @@ public final class ClipStore {
         let record = ClipRecord(
             id: id,
             createdAt: createdAt,
+            lastCopiedAt: createdAt,
             itemCount: captured.itemCount,
             contentHash: captured.contentHash,
+            canonicalTextHash: captured.canonicalTextHash,
             primaryKind: captured.primaryKind,
             summary: captured.summary,
             searchableText: captured.searchableText,
@@ -128,7 +148,11 @@ public final class ClipStore {
 
         do {
             try db.exec("BEGIN IMMEDIATE TRANSACTION;")
-            try insertRecord(record, typeIdentifiersJSON: typeIdentifiersJSON)
+            try insertRecord(
+                record,
+                canonicalTextHash: captured.canonicalTextHash,
+                typeIdentifiersJSON: typeIdentifiersJSON
+            )
             for representation in storedRepresentations {
                 try insertRepresentation(representation, clipID: id)
             }
@@ -143,49 +167,57 @@ public final class ClipStore {
         return record
     }
 
-    public func search(_ query: String = "", limit: Int = 100) throws -> [ClipRecord] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return try records(
-                sql: """
-                SELECT id, created_at, item_count, content_hash, primary_kind, summary,
-                       searchable_text, type_identifiers, byte_count, thumbnail_path
-                FROM clips
-                ORDER BY created_at DESC
-                LIMIT ?;
-                """,
-                bindings: { statement in
-                    try statement.bind(limit, at: 1)
-                }
-            )
+    public func search(
+        _ query: String = "",
+        limit: Int = 100,
+        shouldCancel: () -> Bool = { false }
+    ) throws -> [ClipRecord] {
+        if shouldCancel() {
+            throw CancellationError()
         }
 
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let terms = Self.searchTerms(from: trimmed)
-        guard !terms.isEmpty else {
+        guard trimmed.isEmpty || !terms.isEmpty else {
             return []
         }
 
-        return try records(
-            sql: """
-            SELECT id, created_at, item_count, content_hash, primary_kind, summary,
-                   searchable_text, type_identifiers, byte_count, thumbnail_path
+        let statement = try db.prepare(
+            """
+            SELECT \(Self.recordColumns)
             FROM clips
-            ORDER BY created_at DESC;
-            """,
-            bindings: { _ in }
+            ORDER BY last_copied_at DESC;
+            """
         )
-        .filter { record in
-            Self.record(record, matchesTerms: terms)
+        var matches: [ClipRecord] = []
+        var seenDuplicateKeys = Set<String>()
+
+        while try statement.step() {
+            if shouldCancel() {
+                throw CancellationError()
+            }
+
+            let record = try record(from: statement)
+            let duplicateKey = record.canonicalTextHash.map { "text:\($0)" }
+                ?? "content:\(record.contentHash)"
+            guard trimmed.isEmpty || Self.record(record, matchesTerms: terms) else {
+                continue
+            }
+            guard seenDuplicateKeys.insert(duplicateKey).inserted else {
+                continue
+            }
+            matches.append(record)
+            if matches.count == limit {
+                break
+            }
         }
-        .prefix(limit)
-        .map { $0 }
+        return matches
     }
 
     public func record(id: UUID) throws -> ClipRecord? {
         try records(
             sql: """
-            SELECT id, created_at, item_count, content_hash, primary_kind, summary,
-                   searchable_text, type_identifiers, byte_count, thumbnail_path
+            SELECT \(Self.recordColumns)
             FROM clips
             WHERE id = ?
             LIMIT 1;
@@ -194,6 +226,27 @@ public final class ClipStore {
                 try statement.bind(id, at: 1)
             }
         ).first
+    }
+
+    @discardableResult
+    public func markCopied(id: UUID, at date: Date = Date()) throws -> ClipRecord {
+        guard let existingRecord = try record(id: id) else {
+            throw ClipboardHistoryError.notFound(id)
+        }
+
+        if let canonicalTextHash = try canonicalTextHash(for: existingRecord) {
+            try updateCanonicalTextHash(id: id, canonicalTextHash: canonicalTextHash)
+            _ = try semanticDuplicateRecords(
+                canonicalTextHash: canonicalTextHash,
+                summary: existingRecord.summary
+            )
+        }
+
+        try touchClip(id: id, at: date)
+        guard let updatedRecord = try record(id: id) else {
+            throw ClipboardHistoryError.notFound(id)
+        }
+        return updatedRecord
     }
 
     public func deleteClip(id: UUID) throws {
@@ -226,7 +279,7 @@ public final class ClipStore {
 
         try db.exec("BEGIN IMMEDIATE TRANSACTION;")
         do {
-            let statement = try db.prepare("DELETE FROM clips WHERE created_at < ?;")
+            let statement = try db.prepare("DELETE FROM clips WHERE last_copied_at < ?;")
             try statement.bind(cutoff.timeIntervalSince1970, at: 1)
             try statement.run()
             try db.exec("COMMIT;")
@@ -366,8 +419,10 @@ public final class ClipStore {
             CREATE TABLE IF NOT EXISTS clips (
                 id TEXT PRIMARY KEY NOT NULL,
                 created_at REAL NOT NULL,
+                last_copied_at REAL NOT NULL,
                 item_count INTEGER NOT NULL,
                 content_hash TEXT NOT NULL,
+                canonical_text_hash TEXT,
                 primary_kind TEXT NOT NULL,
                 summary TEXT NOT NULL,
                 searchable_text TEXT NOT NULL,
@@ -409,6 +464,39 @@ public final class ClipStore {
             END;
             """
         )
+        try ensureCanonicalTextHashColumn()
+        try ensureLastCopiedAtColumn()
+        try db.exec(
+            """
+            CREATE INDEX IF NOT EXISTS clips_canonical_text_hash_idx ON clips(canonical_text_hash);
+            CREATE INDEX IF NOT EXISTS clips_last_copied_at_idx ON clips(last_copied_at DESC);
+            """
+        )
+    }
+
+    private func ensureCanonicalTextHashColumn() throws {
+        let statement = try db.prepare("PRAGMA table_info(clips);")
+        while try statement.step() {
+            if statement.columnString(1) == "canonical_text_hash" {
+                return
+            }
+        }
+        try db.exec("ALTER TABLE clips ADD COLUMN canonical_text_hash TEXT;")
+    }
+
+    private func ensureLastCopiedAtColumn() throws {
+        let statement = try db.prepare("PRAGMA table_info(clips);")
+        var hasColumn = false
+        while try statement.step() {
+            if statement.columnString(1) == "last_copied_at" {
+                hasColumn = true
+                break
+            }
+        }
+        if !hasColumn {
+            try db.exec("ALTER TABLE clips ADD COLUMN last_copied_at REAL;")
+        }
+        try db.exec("UPDATE clips SET last_copied_at = created_at WHERE last_copied_at IS NULL;")
     }
 
     private func encryptExistingStoredContent() throws {
@@ -488,26 +576,32 @@ public final class ClipStore {
         )
     }
 
-    private func insertRecord(_ record: ClipRecord, typeIdentifiersJSON: String) throws {
+    private func insertRecord(
+        _ record: ClipRecord,
+        canonicalTextHash: String?,
+        typeIdentifiersJSON: String
+    ) throws {
         let statement = try db.prepare(
             """
             INSERT INTO clips (
-                id, created_at, item_count, content_hash, primary_kind, summary,
-                searchable_text, type_identifiers, byte_count, thumbnail_path
+                id, created_at, last_copied_at, item_count, content_hash, canonical_text_hash,
+                primary_kind, summary, searchable_text, type_identifiers, byte_count, thumbnail_path
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
         )
         try statement.bind(record.id, at: 1)
         try statement.bind(record.createdAt.timeIntervalSince1970, at: 2)
-        try statement.bind(record.itemCount, at: 3)
-        try statement.bind(record.contentHash, at: 4)
-        try statement.bind(record.primaryKind.rawValue, at: 5)
-        try statement.bind(cipher.encryptText(record.summary), at: 6)
-        try statement.bind(cipher.encryptText(record.searchableText), at: 7)
-        try statement.bind(cipher.encryptText(typeIdentifiersJSON), at: 8)
-        try statement.bind(record.byteCount, at: 9)
-        try statement.bind(record.thumbnailPath, at: 10)
+        try statement.bind(record.lastCopiedAt.timeIntervalSince1970, at: 3)
+        try statement.bind(record.itemCount, at: 4)
+        try statement.bind(record.contentHash, at: 5)
+        try statement.bind(canonicalTextHash, at: 6)
+        try statement.bind(record.primaryKind.rawValue, at: 7)
+        try statement.bind(cipher.encryptText(record.summary), at: 8)
+        try statement.bind(cipher.encryptText(record.searchableText), at: 9)
+        try statement.bind(cipher.encryptText(typeIdentifiersJSON), at: 10)
+        try statement.bind(record.byteCount, at: 11)
+        try statement.bind(record.thumbnailPath, at: 12)
         try statement.run()
     }
 
@@ -527,8 +621,17 @@ public final class ClipStore {
     }
 
     private func touchClip(id: UUID, at date: Date) throws {
-        let statement = try db.prepare("UPDATE clips SET created_at = ? WHERE id = ?;")
+        let statement = try db.prepare("UPDATE clips SET last_copied_at = ? WHERE id = ?;")
         try statement.bind(date.timeIntervalSince1970, at: 1)
+        try statement.bind(id, at: 2)
+        try statement.run()
+    }
+
+    private func updateCanonicalTextHash(id: UUID, canonicalTextHash: String) throws {
+        let statement = try db.prepare(
+            "UPDATE clips SET canonical_text_hash = ? WHERE id = ?;"
+        )
+        try statement.bind(canonicalTextHash, at: 1)
         try statement.bind(id, at: 2)
         try statement.run()
     }
@@ -540,12 +643,19 @@ public final class ClipStore {
         try statement.run()
     }
 
-    private func records(sql: String, bindings: (SQLiteStatement) throws -> Void) throws -> [ClipRecord] {
+    private func records(
+        sql: String,
+        bindings: (SQLiteStatement) throws -> Void,
+        shouldCancel: () -> Bool = { false }
+    ) throws -> [ClipRecord] {
         let statement = try db.prepare(sql)
         try bindings(statement)
 
         var records: [ClipRecord] = []
         while try statement.step() {
+            if shouldCancel() {
+                throw CancellationError()
+            }
             records.append(try record(from: statement))
         }
         return records
@@ -583,12 +693,12 @@ public final class ClipStore {
     private func record(from statement: SQLiteStatement) throws -> ClipRecord {
         guard let idString = statement.columnString(0),
               let id = UUID(uuidString: idString),
-              let contentHash = statement.columnString(3),
-              let kindString = statement.columnString(4),
+              let contentHash = statement.columnString(4),
+              let kindString = statement.columnString(6),
               let primaryKind = ClipPrimaryKind(rawValue: kindString),
-              let rawSummary = statement.columnString(5),
-              let rawSearchableText = statement.columnString(6),
-              let rawTypeIdentifiersJSON = statement.columnString(7) else {
+              let rawSummary = statement.columnString(7),
+              let rawSearchableText = statement.columnString(8),
+              let rawTypeIdentifiersJSON = statement.columnString(9) else {
             throw ClipboardHistoryError.database("Unable to decode clip row.")
         }
 
@@ -599,14 +709,16 @@ public final class ClipStore {
         return ClipRecord(
             id: id,
             createdAt: Date(timeIntervalSince1970: statement.columnDouble(1)),
-            itemCount: statement.columnInt(2),
+            lastCopiedAt: Date(timeIntervalSince1970: statement.columnDouble(2)),
+            itemCount: statement.columnInt(3),
             contentHash: contentHash,
+            canonicalTextHash: statement.columnString(5),
             primaryKind: primaryKind,
             summary: summary,
             searchableText: searchableText,
             typeIdentifiers: try decodeTypeIdentifiers(typeIdentifiersJSON),
-            byteCount: statement.columnInt64(8),
-            thumbnailPath: statement.columnString(9)
+            byteCount: statement.columnInt64(10),
+            thumbnailPath: statement.columnString(11)
         )
     }
 
@@ -727,11 +839,10 @@ public final class ClipStore {
     private func record(contentHash: String) throws -> ClipRecord? {
         try records(
             sql: """
-            SELECT id, created_at, item_count, content_hash, primary_kind, summary,
-                   searchable_text, type_identifiers, byte_count, thumbnail_path
+            SELECT \(Self.recordColumns)
             FROM clips
             WHERE content_hash = ?
-            ORDER BY created_at DESC
+            ORDER BY last_copied_at DESC
             LIMIT 1;
             """,
             bindings: { statement in
@@ -740,8 +851,104 @@ public final class ClipStore {
         ).first
     }
 
+    private func records(canonicalTextHash: String) throws -> [ClipRecord] {
+        try records(
+            sql: """
+            SELECT \(Self.recordColumns)
+            FROM clips
+            WHERE canonical_text_hash = ?
+            ORDER BY last_copied_at DESC;
+            """,
+            bindings: { statement in
+                try statement.bind(canonicalTextHash, at: 1)
+            }
+        )
+    }
+
+    private func legacyTextRecords(
+        matchingCanonicalTextHash canonicalTextHash: String,
+        summary: String
+    ) throws -> [ClipRecord] {
+        let candidates = try records(
+            sql: """
+            SELECT \(Self.recordColumns)
+            FROM clips
+            WHERE canonical_text_hash IS NULL
+              AND primary_kind IN (?, ?, ?)
+            ORDER BY last_copied_at DESC;
+            """,
+            bindings: { statement in
+                try statement.bind(ClipPrimaryKind.text.rawValue, at: 1)
+                try statement.bind(ClipPrimaryKind.richText.rawValue, at: 2)
+                try statement.bind(ClipPrimaryKind.mixed.rawValue, at: 3)
+            }
+        )
+
+        var matches: [ClipRecord] = []
+        for candidate in candidates where candidate.summary == summary {
+            guard let candidateHash = try self.canonicalTextHash(for: candidate) else {
+                continue
+            }
+            try updateCanonicalTextHash(id: candidate.id, canonicalTextHash: candidateHash)
+            if candidateHash == canonicalTextHash {
+                matches.append(candidate)
+            }
+        }
+        return matches
+    }
+
+    private func semanticDuplicateRecords(
+        canonicalTextHash: String,
+        summary: String
+    ) throws -> [ClipRecord] {
+        let indexedRecords = try records(canonicalTextHash: canonicalTextHash)
+        let legacyRecords = try legacyTextRecords(
+            matchingCanonicalTextHash: canonicalTextHash,
+            summary: summary
+        )
+        return Dictionary(
+            uniqueKeysWithValues: (indexedRecords + legacyRecords).map { ($0.id, $0) }
+        ).values.map { $0 }
+    }
+
+    private func preferredSemanticDuplicate(from records: [ClipRecord]) -> ClipRecord? {
+        records.max { lhs, rhs in
+            if (lhs.thumbnailPath != nil) != (rhs.thumbnailPath != nil) {
+                return lhs.thumbnailPath == nil
+            }
+            if lhs.byteCount != rhs.byteCount {
+                return lhs.byteCount < rhs.byteCount
+            }
+            return lhs.lastCopiedAt < rhs.lastCopiedAt
+        }
+    }
+
+    private func canonicalTextHash(for record: ClipRecord) throws -> String? {
+        if let canonicalTextHash = record.canonicalTextHash {
+            return canonicalTextHash
+        }
+        return PasteboardArchiver.canonicalTextHash(
+            for: try capturedRepresentations(for: record.id),
+            primaryKind: record.primaryKind
+        )
+    }
+
+    private func capturedRepresentations(for clipID: UUID) throws -> [CapturedRepresentation] {
+        try representations(for: clipID).compactMap { representation in
+            let url = urlForRelativePath(representation.storagePath)
+            guard let data = try? dataForStoredFile(at: url) else {
+                return nil
+            }
+            return CapturedRepresentation(
+                itemIndex: representation.itemIndex,
+                typeIdentifier: representation.typeIdentifier,
+                data: data
+            )
+        }
+    }
+
     private func idsOlderThan(_ cutoff: Date) throws -> [UUID] {
-        let statement = try db.prepare("SELECT id FROM clips WHERE created_at < ?;")
+        let statement = try db.prepare("SELECT id FROM clips WHERE last_copied_at < ?;")
         try statement.bind(cutoff.timeIntervalSince1970, at: 1)
 
         var ids: [UUID] = []
@@ -778,7 +985,7 @@ public final class ClipStore {
     }
 
     private func encodeTypeIdentifiers(_ typeIdentifiers: [String]) throws -> String {
-        let data = try jsonEncoder.encode(typeIdentifiers)
+        let data = try JSONEncoder().encode(typeIdentifiers)
         return String(decoding: data, as: UTF8.self)
     }
 
@@ -786,7 +993,7 @@ public final class ClipStore {
         guard let data = string.data(using: .utf8) else {
             return []
         }
-        return try jsonDecoder.decode([String].self, from: data)
+        return try JSONDecoder().decode([String].self, from: data)
     }
 
     private static func searchTerms(from query: String) -> [String] {

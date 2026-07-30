@@ -37,8 +37,10 @@ public enum ClipPrimaryKind: String, Codable, CaseIterable {
 public struct ClipRecord: Identifiable, Equatable, Codable {
     public let id: UUID
     public let createdAt: Date
+    public let lastCopiedAt: Date
     public let itemCount: Int
     public let contentHash: String
+    public let canonicalTextHash: String?
     public let primaryKind: ClipPrimaryKind
     public let summary: String
     public let searchableText: String

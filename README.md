@@ -177,6 +177,10 @@ Features:
 
 - Clipboard capture for text, rich text, files, URLs, images, and mixed
   pasteboard contents.
+- Re-copying the same visible text promotes its existing history item to the
+  top, even when rich clipboard metadata differs.
+- Google Sheets cell copies are captured from their text and HTML
+  representations.
 - Searchable history panel.
 - Arrow-key selection.
 - Return to copy or paste the selected clip.

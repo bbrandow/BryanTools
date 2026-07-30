@@ -251,7 +251,7 @@ private struct HistoryRow: View {
 
                 HStack(spacing: 8) {
                     Label(record.primaryKind.displayName, systemImage: record.primaryKind.symbolName)
-                    Text(relativeDateString(for: record.createdAt))
+                    Text("Copied \(relativeDateString(for: record.lastCopiedAt))")
                     Text(byteCountString(record.byteCount))
                     if record.itemCount > 1 {
                         Text("\(record.itemCount) items")
@@ -330,6 +330,9 @@ private struct HistoryRow: View {
     }
 
     private func relativeDateString(for date: Date) -> String {
+        if abs(date.timeIntervalSinceNow) < 60 {
+            return "now"
+        }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())

@@ -2,6 +2,7 @@ import Foundation
 
 public struct CapturedClip {
     let contentHash: String
+    let canonicalTextHash: String?
     let itemCount: Int
     let primaryKind: ClipPrimaryKind
     let summary: String

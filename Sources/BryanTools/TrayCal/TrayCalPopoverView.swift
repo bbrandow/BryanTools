@@ -6,6 +6,7 @@ struct TrayCalPopoverView: View {
     @ObservedObject var environment: TrayCalModule
     @ObservedObject var vehicleMotionCues: VehicleMotionCuesModule
     @ObservedObject var mouseMacro: MouseMacroModule
+    @ObservedObject var alarm: AlarmModule
     @State private var showingMonthPicker = false
     @State private var editingYear = false
     @State private var yearText = ""
@@ -37,6 +38,8 @@ struct TrayCalPopoverView: View {
                     if !mouseMacro.mappings.isEmpty {
                         floatingButtonsControl
                     }
+
+                    alarmButton
                 }
 
                 Spacer()
@@ -115,6 +118,23 @@ struct TrayCalPopoverView: View {
         .help(self.motionCuesHelp)
         .accessibilityLabel(Text(self.motionCuesAccessibilityLabel))
         .disabled(!vehicleMotionCues.snapshot.isSupported)
+    }
+
+    private var alarmButton: some View {
+        Button(action: environment.openAlarm) {
+            Image(systemName: alarm.isActive ? "alarm.fill" : "alarm")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(alarm.isActive ? Color.accentColor : Color.secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            Color(nsColor: .controlBackgroundColor)
+                .opacity(alarm.isActive ? 0.95 : 0.7)
+        )
+        .help(alarm.trayHelp)
+        .accessibilityLabel(Text(alarm.trayHelp))
     }
 
     @ViewBuilder

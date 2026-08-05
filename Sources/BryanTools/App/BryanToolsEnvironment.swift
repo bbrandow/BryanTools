@@ -13,6 +13,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let quickTask: QuickTaskModule
     let shotFloat: ShotFloatModule
     let screenOCR: ScreenOCRModule
+    let alarm: AlarmModule
     let trayCal: TrayCalModule
     let diskSpaceMonitor: DiskSpaceMonitorModule
     let utcHour: UTCHourModule
@@ -31,6 +32,7 @@ final class BryanToolsEnvironment: ObservableObject {
         quickTask: QuickTaskModule,
         shotFloat: ShotFloatModule,
         screenOCR: ScreenOCRModule,
+        alarm: AlarmModule,
         trayCal: TrayCalModule,
         diskSpaceMonitor: DiskSpaceMonitorModule,
         utcHour: UTCHourModule,
@@ -45,6 +47,7 @@ final class BryanToolsEnvironment: ObservableObject {
         self.quickTask = quickTask
         self.shotFloat = shotFloat
         self.screenOCR = screenOCR
+        self.alarm = alarm
         self.trayCal = trayCal
         self.diskSpaceMonitor = diskSpaceMonitor
         self.utcHour = utcHour
@@ -59,6 +62,7 @@ final class BryanToolsEnvironment: ObservableObject {
             quickTask,
             shotFloat,
             screenOCR,
+            alarm,
             trayCal,
             diskSpaceMonitor,
             utcHour,
@@ -77,6 +81,7 @@ final class BryanToolsEnvironment: ObservableObject {
         )
         trayCal.setVehicleMotionCues(vehicleMotionCues)
         trayCal.setMouseMacro(mouseMacro)
+        trayCal.setAlarm(alarm)
     }
 
     func start() {
@@ -105,6 +110,7 @@ final class BryanToolsEnvironment: ObservableObject {
             quickTask: QuickTaskModule.shared,
             shotFloat: ShotFloatModule.shared,
             screenOCR: ScreenOCRModule.shared,
+            alarm: AlarmModule.shared,
             trayCal: TrayCalModule.shared,
             diskSpaceMonitor: DiskSpaceMonitorModule.shared,
             utcHour: UTCHourModule.shared,

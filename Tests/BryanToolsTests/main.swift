@@ -1110,6 +1110,170 @@ private func testTrayCalToolIdentifier() throws {
     try expect(ToolIdentifier.trayCal.displayName == "TrayCal", "Expected TrayCal tool display name")
 }
 
+private func alarmTestCalendar() -> Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.locale = Locale(identifier: "en_US_POSIX")
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    return calendar
+}
+
+private func alarmDate(
+    year: Int = 2026,
+    month: Int = 5,
+    day: Int = 27,
+    hour: Int,
+    minute: Int = 0,
+    second: Int = 0
+) throws -> Date {
+    var components = DateComponents()
+    components.calendar = alarmTestCalendar()
+    components.timeZone = alarmTestCalendar().timeZone
+    components.year = year
+    components.month = month
+    components.day = day
+    components.hour = hour
+    components.minute = minute
+    components.second = second
+    return try require(components.date, "Expected Alarm test date")
+}
+
+private func testAlarmToolIdentifier() throws {
+    try expect(ToolIdentifier.alarm.rawValue == "alarm", "Expected Alarm tool identifier")
+    try expect(ToolIdentifier.alarm.displayName == "Alarm", "Expected Alarm tool display name")
+}
+
+private func testAlarmSameDayValidation() throws {
+    let calendar = alarmTestCalendar()
+    let now = try alarmDate(hour: 15)
+    let future = try alarmDate(hour: 16)
+    let past = try alarmDate(hour: 14)
+    let tomorrow = try alarmDate(day: 28, hour: 9)
+
+    try expect(
+        try AlarmSchedule.validated(target: future, now: now, calendar: calendar).get() == future,
+        "Expected a future time today to be valid"
+    )
+    try expect(
+        AlarmSchedule.validated(target: past, now: now, calendar: calendar) == .failure(.notInFuture),
+        "Expected a past time today to be rejected"
+    )
+    try expect(
+        AlarmSchedule.validated(target: tomorrow, now: now, calendar: calendar) == .failure(.notToday),
+        "Expected a future time on another day to be rejected"
+    )
+}
+
+private func testAlarmDurationTarget() throws {
+    let calendar = alarmTestCalendar()
+    let now = try alarmDate(hour: 15)
+    let expected = try alarmDate(hour: 17, minute: 30)
+
+    try expect(
+        try AlarmSchedule.target(afterHours: 2, minutes: 30, now: now, calendar: calendar).get() == expected,
+        "Expected Alarm duration to produce a same-day target"
+    )
+    try expect(
+        AlarmSchedule.target(afterHours: 0, minutes: 0, now: now, calendar: calendar) == .failure(.invalidDuration),
+        "Expected a zero duration to be rejected"
+    )
+    try expect(
+        AlarmSchedule.target(
+            afterHours: 1,
+            minutes: 0,
+            now: try alarmDate(hour: 23, minute: 30),
+            calendar: calendar
+        ) == .failure(.notToday),
+        "Expected a duration crossing midnight to be rejected"
+    )
+}
+
+private func testAlarmRemainingTimeFormatting() throws {
+    let now = try alarmDate(hour: 15)
+    let target = now.addingTimeInterval(3_661)
+    try expect(
+        AlarmSchedule.remainingText(target: target, now: now) == "01:01:01",
+        "Expected Alarm remaining time to use HH:MM:SS"
+    )
+}
+
+private func testAlarmReconciliation() throws {
+    let calendar = alarmTestCalendar()
+    let now = try alarmDate(hour: 15)
+    try expect(
+        AlarmSchedule.reconciliation(
+            target: try alarmDate(hour: 16),
+            now: now,
+            calendar: calendar
+        ) == .schedule,
+        "Expected a future alarm today to be scheduled"
+    )
+    try expect(
+        AlarmSchedule.reconciliation(
+            target: try alarmDate(hour: 14),
+            now: now,
+            calendar: calendar
+        ) == .fireNow,
+        "Expected an elapsed alarm today to fire immediately"
+    )
+    try expect(
+        AlarmSchedule.reconciliation(
+            target: try alarmDate(day: 26, hour: 16),
+            now: now,
+            calendar: calendar
+        ) == .clear,
+        "Expected a prior-day alarm to be cleared"
+    )
+    try expect(
+        AlarmSchedule.reconciliation(target: nil, now: now, calendar: calendar) == .none,
+        "Expected no persisted alarm to require no action"
+    )
+}
+
+private func testAlarmStateTransitions() throws {
+    let firstTarget = try alarmDate(hour: 16)
+    let replacementTarget = try alarmDate(hour: 17)
+    var state = AlarmState()
+
+    state.set(targetDate: firstTarget)
+    state.set(targetDate: replacementTarget)
+    try expect(
+        state.phase == .scheduled && state.targetDate == replacementTarget,
+        "Expected setting another alarm to replace the only active target"
+    )
+
+    state.markFiring()
+    try expect(state.phase == .firing, "Expected a scheduled alarm to enter the firing phase")
+
+    state.clear()
+    try expect(
+        state.phase == .inactive && state.targetDate == nil,
+        "Expected cancel or dismiss to clear the active alarm"
+    )
+}
+
+private func testAlarmPreferencesPersistence() throws {
+    let (defaults, suiteName) = try makeTemporaryDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let expected = AlarmPreferences(
+        targetDate: try alarmDate(hour: 16, minute: 45),
+        countdownPosition: AlarmPanelPosition(x: 321.5, y: 654.25)
+    )
+    expected.save(defaults: defaults)
+    try expect(
+        AlarmPreferences.load(defaults: defaults) == expected,
+        "Expected Alarm target and countdown position to persist"
+    )
+
+    AlarmPreferences(targetDate: nil, countdownPosition: expected.countdownPosition).save(defaults: defaults)
+    let cleared = AlarmPreferences.load(defaults: defaults)
+    try expect(cleared.targetDate == nil, "Expected clearing an alarm to remove its persisted target")
+    try expect(
+        cleared.countdownPosition == expected.countdownPosition,
+        "Expected clearing an alarm to preserve its countdown position"
+    )
+}
+
 private func testTrayCalStatusTitleFormatting() throws {
     let date = try trayCalDate(year: 2026, month: 5, day: 22)
     try expect(
@@ -1687,6 +1851,13 @@ private let tests: [(String, () throws -> Void)] = [
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
     ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),
     ("TrayCal tool identifier", testTrayCalToolIdentifier),
+    ("Alarm tool identifier", testAlarmToolIdentifier),
+    ("Alarm same-day validation", testAlarmSameDayValidation),
+    ("Alarm duration target", testAlarmDurationTarget),
+    ("Alarm remaining time formatting", testAlarmRemainingTimeFormatting),
+    ("Alarm reconciliation", testAlarmReconciliation),
+    ("Alarm state transitions", testAlarmStateTransitions),
+    ("Alarm preference persistence", testAlarmPreferencesPersistence),
     ("TrayCal status title", testTrayCalStatusTitleFormatting),
     ("TrayCal popup month name", testTrayCalPopupMonthNameFormatting),
     ("TrayCal May 2026 grid", testTrayCalMay2026MonthGrid),

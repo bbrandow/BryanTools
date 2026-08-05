@@ -8,6 +8,7 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
     case quickTask
     case shotFloat
     case screenOCR
+    case alarm
     case trayCal
     case diskSpaceMonitor
     case utcHour
@@ -33,6 +34,8 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
             return "ShotFloat"
         case .screenOCR:
             return "Screen OCR"
+        case .alarm:
+            return "Alarm"
         case .trayCal:
             return "TrayCal"
         case .diskSpaceMonitor:

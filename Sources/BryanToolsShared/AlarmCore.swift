@@ -11,12 +11,20 @@ public struct AlarmPanelPosition: Codable, Equatable, Sendable {
 }
 
 public struct AlarmPreferences: Equatable, Sendable {
+    public static let defaultShowsFloatingTimer = true
+
     public var targetDate: Date?
     public var countdownPosition: AlarmPanelPosition?
+    public var showsFloatingTimer: Bool
 
-    public init(targetDate: Date? = nil, countdownPosition: AlarmPanelPosition? = nil) {
+    public init(
+        targetDate: Date? = nil,
+        countdownPosition: AlarmPanelPosition? = nil,
+        showsFloatingTimer: Bool = AlarmPreferences.defaultShowsFloatingTimer
+    ) {
         self.targetDate = targetDate
         self.countdownPosition = countdownPosition
+        self.showsFloatingTimer = showsFloatingTimer
     }
 
     public static func load(defaults: UserDefaults = .standard) -> AlarmPreferences {
@@ -31,7 +39,14 @@ public struct AlarmPreferences: Equatable, Sendable {
         } else {
             position = nil
         }
-        return AlarmPreferences(targetDate: targetDate, countdownPosition: position)
+        let showsFloatingTimer = defaults.object(forKey: Key.showsFloatingTimer) == nil
+            ? defaultShowsFloatingTimer
+            : defaults.bool(forKey: Key.showsFloatingTimer)
+        return AlarmPreferences(
+            targetDate: targetDate,
+            countdownPosition: position,
+            showsFloatingTimer: showsFloatingTimer
+        )
     }
 
     public func save(defaults: UserDefaults = .standard) {
@@ -48,12 +63,14 @@ public struct AlarmPreferences: Equatable, Sendable {
             defaults.removeObject(forKey: Key.positionX)
             defaults.removeObject(forKey: Key.positionY)
         }
+        defaults.set(showsFloatingTimer, forKey: Key.showsFloatingTimer)
     }
 
     private enum Key {
         static let targetDate = "alarm.targetDate"
         static let positionX = "alarm.countdownPosition.x"
         static let positionY = "alarm.countdownPosition.y"
+        static let showsFloatingTimer = "alarm.showsFloatingTimer"
     }
 }
 

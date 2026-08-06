@@ -96,6 +96,17 @@ struct AlarmConfigurationView: View {
                 .font(.system(size: 30, weight: .semibold, design: .monospaced))
                 .contentTransition(.numericText())
 
+            if !environment.isFiring {
+                Toggle(
+                    "Show floating timer",
+                    isOn: Binding(
+                        get: { environment.showsFloatingTimer },
+                        set: environment.updateFloatingTimerVisibility
+                    )
+                )
+                .toggleStyle(.checkbox)
+            }
+
             Spacer(minLength: 0)
 
             Button(role: .destructive) {

@@ -13,6 +13,7 @@ final class AlarmModule: ObservableObject, ToolModule {
 
     @Published private(set) var state: AlarmState
     @Published private(set) var now = Date()
+    @Published private(set) var showsFloatingTimer: Bool
     @Published var lastErrorMessage: String?
 
     private var preferences: AlarmPreferences
@@ -27,6 +28,9 @@ final class AlarmModule: ObservableObject, ToolModule {
         onClick: { [weak self] in
             self?.showConfiguration()
         },
+        onDismiss: { [weak self] in
+            self?.updateFloatingTimerVisibility(false)
+        },
         onPositionChange: { [weak self] position in
             self?.saveCountdownPosition(position)
         }
@@ -36,6 +40,7 @@ final class AlarmModule: ObservableObject, ToolModule {
     private init(preferences: AlarmPreferences) {
         self.preferences = preferences
         self.state = AlarmState(targetDate: preferences.targetDate)
+        self.showsFloatingTimer = preferences.showsFloatingTimer
     }
 
     var targetDate: Date? {
@@ -107,6 +112,8 @@ final class AlarmModule: ObservableObject, ToolModule {
             state = newState
             now = currentDate
             preferences.targetDate = target
+            preferences.showsFloatingTimer = true
+            showsFloatingTimer = true
             preferences.save()
             lastErrorMessage = nil
             scheduleActiveAlarm()
@@ -122,6 +129,24 @@ final class AlarmModule: ObservableObject, ToolModule {
 
     func dismissAlarm() {
         clearAlarm()
+    }
+
+    func updateFloatingTimerVisibility(_ isVisible: Bool) {
+        guard state.phase == .scheduled else {
+            return
+        }
+        showsFloatingTimer = isVisible
+        preferences.showsFloatingTimer = isVisible
+        preferences.save()
+
+        if isVisible, let targetDate {
+            countdownWindowManager.show(
+                text: AlarmSchedule.remainingText(target: targetDate, now: now),
+                position: preferences.countdownPosition
+            )
+        } else {
+            countdownWindowManager.close()
+        }
     }
 
     private func reconcile(currentDate: Date = Date()) {
@@ -151,10 +176,14 @@ final class AlarmModule: ObservableObject, ToolModule {
         alertWindowManager.close()
         scheduleFireTimer(targetDate: targetDate)
         scheduleDisplayTimer()
-        countdownWindowManager.show(
-            text: AlarmSchedule.remainingText(target: targetDate, now: now),
-            position: preferences.countdownPosition
-        )
+        if showsFloatingTimer {
+            countdownWindowManager.show(
+                text: AlarmSchedule.remainingText(target: targetDate, now: now),
+                position: preferences.countdownPosition
+            )
+        } else {
+            countdownWindowManager.close()
+        }
     }
 
     private func fireAlarm() {
@@ -185,6 +214,8 @@ final class AlarmModule: ObservableObject, ToolModule {
         clearedState.clear()
         state = clearedState
         preferences.targetDate = nil
+        preferences.showsFloatingTimer = true
+        showsFloatingTimer = true
         preferences.save()
         lastErrorMessage = nil
         countdownWindowManager.close()
@@ -223,10 +254,12 @@ final class AlarmModule: ObservableObject, ToolModule {
             fireAlarm()
             return
         }
-        countdownWindowManager.show(
-            text: AlarmSchedule.remainingText(target: targetDate, now: now),
-            position: preferences.countdownPosition
-        )
+        if showsFloatingTimer {
+            countdownWindowManager.show(
+                text: AlarmSchedule.remainingText(target: targetDate, now: now),
+                position: preferences.countdownPosition
+            )
+        }
     }
 
     private func invalidateTimers() {

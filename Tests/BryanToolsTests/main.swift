@@ -1255,9 +1255,15 @@ private func testAlarmPreferencesPersistence() throws {
     let (defaults, suiteName) = try makeTemporaryDefaults()
     defer { defaults.removePersistentDomain(forName: suiteName) }
 
+    try expect(
+        AlarmPreferences.load(defaults: defaults).showsFloatingTimer,
+        "Expected Alarm floating timer to be enabled by default"
+    )
+
     let expected = AlarmPreferences(
         targetDate: try alarmDate(hour: 16, minute: 45),
-        countdownPosition: AlarmPanelPosition(x: 321.5, y: 654.25)
+        countdownPosition: AlarmPanelPosition(x: 321.5, y: 654.25),
+        showsFloatingTimer: false
     )
     expected.save(defaults: defaults)
     try expect(
@@ -1265,13 +1271,18 @@ private func testAlarmPreferencesPersistence() throws {
         "Expected Alarm target and countdown position to persist"
     )
 
-    AlarmPreferences(targetDate: nil, countdownPosition: expected.countdownPosition).save(defaults: defaults)
+    AlarmPreferences(
+        targetDate: nil,
+        countdownPosition: expected.countdownPosition,
+        showsFloatingTimer: false
+    ).save(defaults: defaults)
     let cleared = AlarmPreferences.load(defaults: defaults)
     try expect(cleared.targetDate == nil, "Expected clearing an alarm to remove its persisted target")
     try expect(
         cleared.countdownPosition == expected.countdownPosition,
         "Expected clearing an alarm to preserve its countdown position"
     )
+    try expect(!cleared.showsFloatingTimer, "Expected Alarm floating visibility to persist")
 }
 
 private func testTrayCalStatusTitleFormatting() throws {

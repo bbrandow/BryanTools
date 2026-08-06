@@ -4,14 +4,20 @@ import SwiftUI
 
 @MainActor
 final class AlarmCountdownWindowManager {
-    static let panelSize = NSSize(width: 112, height: 32)
+    static let panelSize = NSSize(width: 128, height: 32)
 
     private let onClick: () -> Void
+    private let onDismiss: () -> Void
     private let onPositionChange: (AlarmPanelPosition) -> Void
     private var panel: AlarmCountdownPanel?
 
-    init(onClick: @escaping () -> Void, onPositionChange: @escaping (AlarmPanelPosition) -> Void) {
+    init(
+        onClick: @escaping () -> Void,
+        onDismiss: @escaping () -> Void,
+        onPositionChange: @escaping (AlarmPanelPosition) -> Void
+    ) {
         self.onClick = onClick
+        self.onDismiss = onDismiss
         self.onPositionChange = onPositionChange
     }
 
@@ -22,7 +28,7 @@ final class AlarmCountdownWindowManager {
             return
         }
 
-        let panel = AlarmCountdownPanel(text: text, onClick: onClick)
+        let panel = AlarmCountdownPanel(text: text, onClick: onClick, onDismiss: onDismiss)
         panel.onDragEnded = { [weak self, weak panel] in
             guard let self, let panel else {
                 return
@@ -88,7 +94,7 @@ private final class AlarmCountdownPanel: NSPanel {
         }
     }
 
-    init(text: String, onClick: @escaping () -> Void) {
+    init(text: String, onClick: @escaping () -> Void, onDismiss: @escaping () -> Void) {
         countdownView = AlarmCountdownView(text: text)
         super.init(
             contentRect: NSRect(origin: .zero, size: AlarmCountdownWindowManager.panelSize),
@@ -98,6 +104,7 @@ private final class AlarmCountdownPanel: NSPanel {
         )
 
         countdownView.onClick = onClick
+        countdownView.onDismiss = onDismiss
         contentView = countdownView
         isReleasedWhenClosed = false
         isOpaque = false
@@ -125,6 +132,7 @@ private final class AlarmCountdownView: NSView {
         }
     }
     var onClick: (() -> Void)?
+    var onDismiss: (() -> Void)?
     var onDragEnded: (() -> Void)?
 
     private var initialMouseLocation: NSPoint?
@@ -159,7 +167,18 @@ private final class AlarmCountdownView: NSView {
         ]
         let string = NSAttributedString(string: text, attributes: attributes)
         let size = string.size()
-        string.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+        let timerArea = NSRect(x: 0, y: 0, width: bounds.width - 28, height: bounds.height)
+        string.draw(at: NSPoint(x: timerArea.midX - size.width / 2, y: bounds.midY - size.height / 2))
+
+        let xPath = NSBezierPath()
+        let xBounds = NSRect(x: bounds.maxX - 20, y: bounds.midY - 5, width: 10, height: 10)
+        xPath.move(to: NSPoint(x: xBounds.minX, y: xBounds.minY))
+        xPath.line(to: NSPoint(x: xBounds.maxX, y: xBounds.maxY))
+        xPath.move(to: NSPoint(x: xBounds.maxX, y: xBounds.minY))
+        xPath.line(to: NSPoint(x: xBounds.minX, y: xBounds.maxY))
+        NSColor.secondaryLabelColor.setStroke()
+        xPath.lineWidth = 1.5
+        xPath.stroke()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -190,11 +209,18 @@ private final class AlarmCountdownView: NSView {
             initialWindowOrigin = nil
             isDragging = false
         }
+        let location = convert(event.locationInWindow, from: nil)
         if isDragging {
             onDragEnded?()
+        } else if closeButtonRect.contains(location) {
+            onDismiss?()
         } else {
             onClick?()
         }
+    }
+
+    private var closeButtonRect: NSRect {
+        NSRect(x: bounds.maxX - 28, y: 0, width: 28, height: bounds.height)
     }
 }
 

@@ -7,6 +7,7 @@ struct TrayCalPopoverView: View {
     @ObservedObject var vehicleMotionCues: VehicleMotionCuesModule
     @ObservedObject var mouseMacro: MouseMacroModule
     @ObservedObject var alarm: AlarmModule
+    @ObservedObject var spotifyNowPlaying: SpotifyNowPlayingModule
     @State private var showingMonthPicker = false
     @State private var editingYear = false
     @State private var yearText = ""
@@ -40,13 +41,9 @@ struct TrayCalPopoverView: View {
                     }
 
                     alarmButton
+
+                    spotifyButton
                 }
-
-                Spacer()
-
-                Capsule()
-                    .fill(Color.secondary.opacity(0.15))
-                    .frame(width: 34, height: 5)
 
                 Spacer()
 
@@ -135,6 +132,23 @@ struct TrayCalPopoverView: View {
         )
         .help(alarm.trayHelp)
         .accessibilityLabel(Text(alarm.trayHelp))
+    }
+
+    private var spotifyButton: some View {
+        Button(action: spotifyNowPlaying.toggleVisible) {
+            Image(systemName: "music.note")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(spotifyNowPlaying.isVisible ? Color.accentColor : Color.secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            Color(nsColor: .controlBackgroundColor)
+                .opacity(spotifyNowPlaying.isVisible ? 0.95 : 0.7)
+        )
+        .help(spotifyNowPlaying.trayHelp)
+        .accessibilityLabel(Text(spotifyNowPlaying.trayHelp))
     }
 
     @ViewBuilder

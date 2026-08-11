@@ -1285,6 +1285,73 @@ private func testAlarmPreferencesPersistence() throws {
     try expect(!cleared.showsFloatingTimer, "Expected Alarm floating visibility to persist")
 }
 
+private func testSpotifyNowPlayingToolIdentifier() throws {
+    try expect(
+        ToolIdentifier.spotifyNowPlaying.rawValue == "spotifyNowPlaying",
+        "Expected Spotify Now Playing tool identifier"
+    )
+    try expect(
+        ToolIdentifier.spotifyNowPlaying.displayName == "Spotify Now Playing",
+        "Expected Spotify Now Playing display name"
+    )
+}
+
+private func testSpotifyNowPlayingPreferences() throws {
+    let (defaults, suiteName) = try makeTemporaryDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let initial = SpotifyNowPlayingPreferences.load(defaults: defaults)
+    try expect(!initial.isVisible, "Expected Spotify Now Playing to be hidden by default")
+    try expect(initial.position == nil, "Expected no default Spotify panel position")
+    try expect(
+        SpotifyNowPlayingPreferences.pollInterval == 3,
+        "Expected Spotify Now Playing to poll every three seconds"
+    )
+
+    let expected = SpotifyNowPlayingPreferences(
+        isVisible: true,
+        position: SpotifyNowPlayingPosition(x: 420.5, y: 730.25)
+    )
+    expected.save(defaults: defaults)
+    try expect(
+        SpotifyNowPlayingPreferences.load(defaults: defaults) == expected,
+        "Expected Spotify visibility and panel position to persist"
+    )
+}
+
+private func testSpotifyNowPlayingDisplay() throws {
+    let playing = SpotifyNowPlayingDisplay.snapshot(
+        scriptValues: ["playing", "Life on Mars?", "David Bowie"]
+    )
+    try expect(playing.state == .playing, "Expected Spotify playing state")
+    try expect(
+        SpotifyNowPlayingDisplay.primaryText(for: playing) == "Life on Mars?",
+        "Expected Spotify track title"
+    )
+    try expect(
+        SpotifyNowPlayingDisplay.secondaryText(for: playing) == "David Bowie",
+        "Expected Spotify artist"
+    )
+
+    let paused = SpotifyNowPlayingDisplay.snapshot(
+        scriptValues: ["paused", "Heroes", "David Bowie"]
+    )
+    try expect(
+        SpotifyNowPlayingDisplay.secondaryText(for: paused) == "David Bowie - Paused",
+        "Expected paused Spotify status beside the artist"
+    )
+
+    let stopped = SpotifyNowPlayingDisplay.snapshot(scriptValues: ["stopped", "", ""])
+    try expect(
+        SpotifyNowPlayingDisplay.primaryText(for: stopped) == "Nothing playing",
+        "Expected stopped Spotify empty state"
+    )
+    try expect(
+        SpotifyNowPlayingDisplay.primaryText(for: .notRunning) == "Spotify isn't running",
+        "Expected Spotify not-running empty state"
+    )
+}
+
 private func testTrayCalStatusTitleFormatting() throws {
     let date = try trayCalDate(year: 2026, month: 5, day: 22)
     try expect(
@@ -1869,6 +1936,9 @@ private let tests: [(String, () throws -> Void)] = [
     ("Alarm reconciliation", testAlarmReconciliation),
     ("Alarm state transitions", testAlarmStateTransitions),
     ("Alarm preference persistence", testAlarmPreferencesPersistence),
+    ("Spotify Now Playing tool identifier", testSpotifyNowPlayingToolIdentifier),
+    ("Spotify Now Playing preferences", testSpotifyNowPlayingPreferences),
+    ("Spotify Now Playing display", testSpotifyNowPlayingDisplay),
     ("TrayCal status title", testTrayCalStatusTitleFormatting),
     ("TrayCal popup month name", testTrayCalPopupMonthNameFormatting),
     ("TrayCal May 2026 grid", testTrayCalMay2026MonthGrid),

@@ -30,6 +30,7 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
     private var vehicleMotionCues = VehicleMotionCuesModule.shared
     private var mouseMacro = MouseMacroModule.shared
     private var alarm = AlarmModule.shared
+    private var spotifyNowPlaying = SpotifyNowPlayingModule.shared
 
     private override init() {
         let calendar = TrayCalCalendar.defaultCalendar()
@@ -56,6 +57,10 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
 
     func setAlarm(_ alarm: AlarmModule) {
         self.alarm = alarm
+    }
+
+    func setSpotifyNowPlaying(_ spotifyNowPlaying: SpotifyNowPlayingModule) {
+        self.spotifyNowPlaying = spotifyNowPlaying
     }
 
     func start() {
@@ -215,7 +220,8 @@ final class TrayCalModule: NSObject, ObservableObject, ToolModule, NSPopoverDele
                 environment: self,
                 vehicleMotionCues: vehicleMotionCues,
                 mouseMacro: mouseMacro,
-                alarm: alarm
+                alarm: alarm,
+                spotifyNowPlaying: spotifyNowPlaying
             )
         )
         return popover

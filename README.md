@@ -41,6 +41,8 @@ open "/Applications/Bryan Tools.app"
 | Disk Space Monitor | Menu bar free-space label | Primary-drive free-space sampling and trend chart |
 | UTC Hour | Menu bar UTC hour label | UTC-to-Pacific hour lookup table |
 | Vehicle Motion Cues | TrayCal footer toggle | One-click on/off control for macOS Vehicle Motion Cues |
+| Alarm | TrayCal footer button | Same-day alarm with a floating countdown and top-center alert |
+| Spotify Now Playing | TrayCal footer toggle | Always-on-top current Spotify track and artist |
 | Clipboard History | `Shift-Command-V` | Search, restore, delete, and float clipboard clips |
 | Paste Plain Text | `Shift-Option-Command-V` | Paste current clipboard text without formatting |
 | Color Picker | `Shift-Command-~` | Pick any screen pixel color as a hex value |
@@ -75,6 +77,8 @@ Features:
 - MouseMacro floating-button control. A single mapping uses the grid icon as a
   direct toggle; multiple mappings use the same icon as a menu with individual
   visibility toggles.
+- Alarm button for setting and managing a same-day alarm.
+- Spotify music-note toggle for the floating Now Playing panel.
 - Calendar view resets to today after the popover has been closed for two
   minutes.
 
@@ -161,6 +165,40 @@ Notes:
 - Apple limits this feature to supported Mac laptop models.
 
 More information on this Apple feature (iOS and macOS): https://www.theverge.com/tech/942854/apple-vehicle-motion-cues-review-really-work
+
+## Alarm
+
+Alarm provides one same-day alarm at a time from the TrayCal footer.
+
+Features:
+
+- Configure an alarm by duration or exact time later today.
+- Draggable always-on-top countdown timer.
+- X button hides the countdown without canceling the alarm.
+- Active-alarm controls can restore the floating timer or cancel the alarm.
+- Alarm target, visibility, and floating position survive an app restart.
+- Missed alarms from earlier today fire after wake or relaunch.
+- Silent top-center alert with a Dismiss button.
+
+<!-- Screenshot placeholder: TrayCal alarm setup and the floating countdown timer. -->
+
+## Spotify Now Playing
+
+Spotify Now Playing shows the current Spotify track in a compact floating panel.
+Use the music-note button in the TrayCal footer to show or hide it.
+
+Features:
+
+- Displays the current track and artist, including paused and stopped states.
+- Draggable, nonactivating, always-on-top panel across Spaces and full-screen apps.
+- X button hides the panel and updates the TrayCal toggle.
+- Visibility and screen position persist across Bryan Tools launches.
+- Polls Spotify locally every three seconds only while the panel is visible.
+- Does not launch Spotify when it is not already running.
+- Uses macOS Automation permission to read Spotify playback; no Spotify account,
+  OAuth token, or network API is required.
+
+<!-- Screenshot placeholder: Spotify playing a track with the floating Now Playing panel visible. -->
 
 ## Clipboard History
 

@@ -24,5 +24,7 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Bryan Tools reads the current Spotify track for the optional floating Now Playing window.</string>
 </dict>
 </plist>

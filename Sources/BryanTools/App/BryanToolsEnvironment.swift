@@ -14,6 +14,7 @@ final class BryanToolsEnvironment: ObservableObject {
     let shotFloat: ShotFloatModule
     let screenOCR: ScreenOCRModule
     let alarm: AlarmModule
+    let spotifyNowPlaying: SpotifyNowPlayingModule
     let trayCal: TrayCalModule
     let diskSpaceMonitor: DiskSpaceMonitorModule
     let utcHour: UTCHourModule
@@ -33,6 +34,7 @@ final class BryanToolsEnvironment: ObservableObject {
         shotFloat: ShotFloatModule,
         screenOCR: ScreenOCRModule,
         alarm: AlarmModule,
+        spotifyNowPlaying: SpotifyNowPlayingModule,
         trayCal: TrayCalModule,
         diskSpaceMonitor: DiskSpaceMonitorModule,
         utcHour: UTCHourModule,
@@ -48,6 +50,7 @@ final class BryanToolsEnvironment: ObservableObject {
         self.shotFloat = shotFloat
         self.screenOCR = screenOCR
         self.alarm = alarm
+        self.spotifyNowPlaying = spotifyNowPlaying
         self.trayCal = trayCal
         self.diskSpaceMonitor = diskSpaceMonitor
         self.utcHour = utcHour
@@ -63,6 +66,7 @@ final class BryanToolsEnvironment: ObservableObject {
             shotFloat,
             screenOCR,
             alarm,
+            spotifyNowPlaying,
             trayCal,
             diskSpaceMonitor,
             utcHour,
@@ -82,6 +86,7 @@ final class BryanToolsEnvironment: ObservableObject {
         trayCal.setVehicleMotionCues(vehicleMotionCues)
         trayCal.setMouseMacro(mouseMacro)
         trayCal.setAlarm(alarm)
+        trayCal.setSpotifyNowPlaying(spotifyNowPlaying)
     }
 
     func start() {
@@ -111,6 +116,7 @@ final class BryanToolsEnvironment: ObservableObject {
             shotFloat: ShotFloatModule.shared,
             screenOCR: ScreenOCRModule.shared,
             alarm: AlarmModule.shared,
+            spotifyNowPlaying: SpotifyNowPlayingModule.shared,
             trayCal: TrayCalModule.shared,
             diskSpaceMonitor: DiskSpaceMonitorModule.shared,
             utcHour: UTCHourModule.shared,

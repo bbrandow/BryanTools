@@ -219,6 +219,8 @@ Features:
   top, even when rich clipboard metadata differs.
 - Google Sheets cell copies are captured from their text and HTML
   representations.
+- HTML search text is extracted without rendering the document or loading
+  embedded network resources; original HTML clipboard bytes remain preserved.
 - Searchable history panel.
 - Arrow-key selection.
 - Return to copy or paste the selected clip.

@@ -29,11 +29,11 @@ public enum PasteboardPlainTextExtractor {
             }
 
             if normalized.contains("html"),
-               let string = attributedString(from: data, documentType: .html) {
+               let string = SafeHTMLTextExtractor.plainText(from: data) {
                 return string
             }
             if normalized.contains("rtf"),
-               let string = attributedString(from: data, documentType: .rtf) {
+               let string = rtfString(from: data) {
                 return string
             }
             if normalized.contains("plain-text") || normalized.contains("utf8-plain-text"),
@@ -46,10 +46,10 @@ public enum PasteboardPlainTextExtractor {
         return nil
     }
 
-    private static func attributedString(from data: Data, documentType: NSAttributedString.DocumentType) -> String? {
+    private static func rtfString(from data: Data) -> String? {
         let attributed = try? NSAttributedString(
             data: data,
-            options: [.documentType: documentType],
+            options: [.documentType: NSAttributedString.DocumentType.rtf],
             documentAttributes: nil
         )
         let string = attributed?.string

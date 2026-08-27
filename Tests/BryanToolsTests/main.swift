@@ -753,6 +753,79 @@ private func testPlainTextExtractorReadsHTML() throws {
     try expect(text.contains("Hello plain"), "Expected HTML formatting to be stripped")
 }
 
+private func testSafeHTMLTextExtractionIgnoresExternalResources() throws {
+    let html = """
+    <!doctype html>
+    <html>
+      <head>
+        <link rel="stylesheet" href="https://slow.invalid/styles.css">
+        <style>body { background-image: url(https://slow.invalid/background.png); }</style>
+        <script>fetch("https://slow.invalid/tracker")</script>
+      </head>
+      <body>
+        <p>Visible &amp; safe</p>
+        <img src="https://slow.invalid/image.png">
+        <div>Second&nbsp;line &#x1F600; and 1 &lt; 2</div>
+      </body>
+    </html>
+    """
+
+    let startedAt = Date()
+    let text = try require(
+        SafeHTMLTextExtractor.plainText(from: Data(html.utf8)),
+        "Expected safe HTML text extraction"
+    )
+    try expect(
+        Date().timeIntervalSince(startedAt) < 2,
+        "Expected HTML resource references to be processed without importer timeouts"
+    )
+    try expect(
+        text == "Visible & safe\nSecond line 😀 and 1 < 2",
+        "Expected safe HTML extraction to preserve visible text and entities"
+    )
+    try expect(
+        !text.contains("slow.invalid") && !text.contains("fetch"),
+        "Expected safe HTML extraction to ignore resource attributes, scripts, and styles"
+    )
+}
+
+private func testHTMLCapturePreservesOriginalRepresentation() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+
+    let htmlData = Data(
+        "<img src=\"https://slow.invalid/image.png\"><p>network-safe history</p>".utf8
+    )
+    let source = namedPasteboard()
+    source.clearContents()
+    let item = NSPasteboardItem()
+    item.setData(htmlData, forType: NSPasteboard.PasteboardType("public.html"))
+    try requirePasteboardWrite(source.writeObjects([item]))
+
+    let record = try require(
+        try fixture.store.captureCurrentPasteboard(source),
+        "Expected HTML-only clipboard capture"
+    )
+    try expect(
+        try fixture.store.search("network-safe").first?.id == record.id,
+        "Expected safely extracted HTML text to remain searchable"
+    )
+    try expect(
+        try fixture.store.search("slow.invalid").isEmpty,
+        "Expected embedded resource URLs not to enter searchable text"
+    )
+
+    let destination = namedPasteboard()
+    try fixture.store.restoreClip(id: record.id, to: destination)
+    let restoredHTML = destination.pasteboardItems?.first?.data(
+        forType: NSPasteboard.PasteboardType("public.html")
+    )
+    try expect(
+        restoredHTML == htmlData,
+        "Expected original HTML bytes to be preserved unchanged for restore"
+    )
+}
+
 private func testPlainTextExtractorReadsRTF() throws {
     let pasteboard = namedPasteboard()
     pasteboard.clearContents()
@@ -1909,6 +1982,8 @@ private let tests: [(String, () throws -> Void)] = [
     ("non-browser secret-shaped text capture", testLikelyPasswordFromNonBrowserIsCapturedWithoutMarker),
     ("plain text extractor string", testPlainTextExtractorReadsString),
     ("plain text extractor HTML", testPlainTextExtractorReadsHTML),
+    ("safe HTML extractor ignores external resources", testSafeHTMLTextExtractionIgnoresExternalResources),
+    ("HTML capture preserves original representation", testHTMLCapturePreservesOriginalRepresentation),
     ("plain text extractor RTF", testPlainTextExtractorReadsRTF),
     ("plain text extractor image ignore", testPlainTextExtractorIgnoresImages),
     ("image thumbnail high-resolution preview", testImageThumbnailUsesHighResolutionPreview),

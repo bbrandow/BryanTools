@@ -185,13 +185,11 @@ public enum PasteboardArchiver {
         }
 
         if typeIdentifier.contains("html") {
-            if let string = attributedString(from: data, documentType: .html) {
-                richTexts.append(string)
-            } else if let string = item.string(forType: type) ?? String(data: data, encoding: .utf8) {
+            if let string = SafeHTMLTextExtractor.plainText(from: data) {
                 richTexts.append(string)
             }
         } else if typeIdentifier.contains("rtf") {
-            if let string = attributedString(from: data, documentType: .rtf) {
+            if let string = rtfString(from: data) {
                 richTexts.append(string)
             }
         } else if isPlainTextType(typeIdentifier),
@@ -230,10 +228,10 @@ public enum PasteboardArchiver {
         return nil
     }
 
-    private static func attributedString(from data: Data, documentType: NSAttributedString.DocumentType) -> String? {
+    private static func rtfString(from data: Data) -> String? {
         let attributed = try? NSAttributedString(
             data: data,
-            options: [.documentType: documentType],
+            options: [.documentType: NSAttributedString.DocumentType.rtf],
             documentAttributes: nil
         )
         let string = attributed?.string.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -387,10 +385,10 @@ public enum PasteboardArchiver {
                 ?? String(data: representation.data, encoding: .utf16)
         }
         if normalized.contains("html") {
-            return attributedString(from: representation.data, documentType: .html)
+            return SafeHTMLTextExtractor.plainText(from: representation.data)
         }
         if normalized.contains("rtf") {
-            return attributedString(from: representation.data, documentType: .rtf)
+            return rtfString(from: representation.data)
         }
         return nil
     }

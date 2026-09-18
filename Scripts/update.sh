@@ -22,6 +22,9 @@ fi
 echo "Pulling latest changes..."
 git pull --ff-only
 
+echo "Checking SwiftUI build tools..."
+source "$ROOT_DIR/Scripts/build-sdk.sh"
+
 echo "Running self-tests..."
 "$ROOT_DIR/Scripts/test.sh"
 

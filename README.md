@@ -568,6 +568,24 @@ The app also exposes an **Update Now** button in Settings. That button resolves
 the BryanTools source checkout, validates that it is the expected SwiftPM app,
 and runs `Scripts/update.sh`.
 
+### SwiftUI Build Tools
+
+Build, test, and update scripts first compile-check a small SwiftUI view using
+`@State`. If the selected SDK is incomplete (for example, a missing
+`SwiftUIMacros.StateMacro` compiler plugin), they try the other installed macOS
+SDKs in the same developer-tools installation, newest first. This does not
+change the system's `xcode-select` setting.
+
+An explicit `SDKROOT` is respected and validated, rather than silently replaced:
+
+```sh
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk Scripts/update.sh
+```
+
+Use that example only if the SDK exists on your Mac. Without a compatible
+installed SDK, the updater stops before quitting Bryan Tools and explains that
+a complete compatible Xcode or Command Line Tools installation is needed.
+
 ## Test
 
 Bryan Tools uses a framework-free self-test runner so it can run with the local

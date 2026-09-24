@@ -416,9 +416,19 @@ Features:
 - Screenshot-style region reticule.
 - No screen dimming overlay.
 - Floating image window.
-- Drag to move.
-- Scroll to zoom in or out, resizing the window with the image.
-- Thin top bar with one-click close button.
+- Drag the header, or use the hand tool to drag the image, to move the window.
+- Scroll to zoom in or out, resizing the window with the image and scaling all markup together.
+- Header tools for freehand drawing, stroke width in original-image pixels (1-100, default 8),
+  color selection, and an optional arrowhead at the end of each stroke.
+- A circular eraser removes only the markup pixels underneath it, leaving the
+  underlying image intact. Its diameter is four times the current brush width, and
+  its outline scales with zoom. Undo and redo work
+  for both drawing and erasing, using the header buttons or `Command-Z` / `Shift-Command-Z`.
+- Copy the complete image and markup as a full-resolution PNG with the copy button
+  or `Command-C` while the image is focused. Copied images are captured by Clipboard
+  History when clipboard capture is enabled.
+- One-click close button. Each floating window keeps its own edits until closed;
+  markup does not overwrite the original screenshot in Clipboard History.
 - Captured image is added to Clipboard History.
 - Clipboard History image clips can be opened as ShotFloat images.
 

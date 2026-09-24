@@ -29,9 +29,7 @@ struct TrayCalPopoverView: View {
 
             HStack {
                 HStack(spacing: 5) {
-                    iconButton(systemImage: "power", size: 16, action: environment.quit)
-                        .padding(3)
-                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                    iconButton(systemImage: "power", size: 16, hitSize: 28, action: environment.quit)
                         .help("Quit Bryan Tools")
 
                     motionCuesButton
@@ -111,7 +109,6 @@ struct TrayCalPopoverView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(vehicleMotionCues.snapshot.isOn ? 0.95 : 0.7))
         .help(self.motionCuesHelp)
         .accessibilityLabel(Text(self.motionCuesAccessibilityLabel))
         .disabled(!vehicleMotionCues.snapshot.isSupported)
@@ -126,10 +123,6 @@ struct TrayCalPopoverView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(
-            Color(nsColor: .controlBackgroundColor)
-                .opacity(alarm.isActive ? 0.95 : 0.7)
-        )
         .help(alarm.trayHelp)
         .accessibilityLabel(Text(alarm.trayHelp))
     }
@@ -143,10 +136,6 @@ struct TrayCalPopoverView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(
-            Color(nsColor: .controlBackgroundColor)
-                .opacity(spotifyNowPlaying.isVisible ? 0.95 : 0.7)
-        )
         .help(spotifyNowPlaying.trayHelp)
         .accessibilityLabel(Text(spotifyNowPlaying.trayHelp))
     }
@@ -164,10 +153,6 @@ struct TrayCalPopoverView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(
-                Color(nsColor: .controlBackgroundColor)
-                    .opacity(mapping.floatingButton.isVisible ? 0.95 : 0.7)
-            )
             .help(mapping.floatingButton.isVisible ? "Hide floating MouseMacro button" : "Show floating MouseMacro button")
             .accessibilityLabel(
                 Text(mapping.floatingButton.isVisible ? "Hide floating MouseMacro button" : "Show floating MouseMacro button")

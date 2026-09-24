@@ -11,7 +11,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        return true
+        false
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -20,7 +24,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
+@MainActor
+enum BryanToolsLauncher {
+    static func main() {
+        // SceneBuilder cannot conditionally apply macOS 15 scene policies.
+        if #available(macOS 15.0, *) {
+            BryanToolsApp.main()
+        } else {
+            BryanToolsLegacyApp.main()
+        }
+    }
+}
+
+@available(macOS 15.0, *)
 struct BryanToolsApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var environment = BryanToolsEnvironment.shared
+
+    var body: some Scene {
+        Settings {
+            BryanToolsSettingsView(environment: environment)
+        }
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+    }
+}
+
+private struct BryanToolsLegacyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var environment = BryanToolsEnvironment.shared
 

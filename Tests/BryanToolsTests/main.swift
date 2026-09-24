@@ -1149,6 +1149,162 @@ private func testBryanToolsAutoStartDefaultsAndLaunchAgent() throws {
     try expect(plist["RunAtLoad"] as? Bool == true, "Expected auto start LaunchAgent to run at login")
 }
 
+private func testImageMarkupUndoRedoAndErase() throws {
+    let line = ImageMarkupStroke(points: [CGPoint(x: 10, y: 10), CGPoint(x: 90, y: 10)], width: 4, color: .red)
+    let arrow = ImageMarkupStroke(points: [CGPoint(x: 20, y: 60), CGPoint(x: 80, y: 60)], width: 3, color: .blue, hasArrow: true)
+    var document = ImageMarkupDocument()
+    try expect(!document.canUndo && !document.canRedo, "Expected a fresh independent markup document")
+    document.add(ImageMarkupStroke(points: [], width: 3, color: .red))
+    try expect(!document.canUndo, "Expected empty strokes not to create undo entries")
+    document.add(line)
+    document.add(arrow)
+    document.undo()
+    try expect(document.strokes == [line] && document.canRedo, "Expected undo to remove only the last stroke")
+    document.redo()
+    try expect(document.strokes == [line, arrow], "Expected redo to restore the arrow with its style")
+
+    let eraser = ImageMarkupStroke.eraser(points: [CGPoint(x: 50, y: 0), CGPoint(x: 50, y: 80)], brushWidth: 8)
+    document.add(eraser)
+    try expect(document.strokes == [line, arrow, eraser], "Expected an eraser gesture to preserve the original strokes")
+    document.undo()
+    try expect(document.strokes == [line, arrow], "Expected a whole eraser gesture to undo in one step")
+    document.redo()
+    try expect(document.strokes == [line, arrow, eraser], "Expected redo to restore the pixel eraser operation")
+    document.undo()
+    document.add(line)
+    try expect(!document.canRedo, "Expected a new edit to discard redo history")
+    let independent = ImageMarkupDocument()
+    try expect(independent.strokes.isEmpty && !independent.canUndo, "Expected separate windows to have separate edits")
+}
+
+private func testImageMarkupEraserGeometry() throws {
+    let arrow = ImageMarkupStroke(points: [CGPoint(x: 10, y: 50), CGPoint(x: 90, y: 50)], width: 4, color: .red, hasArrow: true)
+    try expect(arrow.arrowPoints.count == 3, "Expected a complete arrowhead")
+    let dot = ImageMarkupStroke(points: [CGPoint(x: 20, y: 20)], width: 10, color: .green, hasArrow: true)
+    try expect(dot.arrowPoints.isEmpty, "Expected a click without direction not to produce an invalid arrow")
+    let repeated = ImageMarkupStroke(points: [.zero, .zero], width: 3, color: .red, hasArrow: true)
+    try expect(repeated.arrowPoints.isEmpty, "Expected repeated points not to produce a degenerate arrowhead")
+    try expect(ImageMarkupStroke.defaultWidth == 8, "Expected an eight-pixel default brush")
+    try expect(ImageMarkupStroke(points: [], width: .infinity, color: .red).width == 8, "Expected the default width fallback")
+    for width: CGFloat in [1, 8, 100] {
+        let eraser = ImageMarkupStroke.eraser(points: [.zero], brushWidth: width)
+        try expect(eraser.isEraser && eraser.width == width * 4, "Expected an eraser diameter four times the brush width")
+        try expect(eraser.arrowPoints.isEmpty, "Expected the eraser never to have an arrowhead")
+    }
+}
+
+private func testImageMarkupPixelErasing() throws {
+    let size = CGSize(width: 128, height: 96)
+    let sourceContext = try require(CGContext(data: nil, width: 128, height: 96, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: CGColorSpaceCreateDeviceRGB(),
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue), "Expected eraser source")
+    sourceContext.setFillColor(NSColor.blue.cgColor)
+    sourceContext.fill(CGRect(origin: .zero, size: size))
+    let source = try require(sourceContext.makeImage(), "Expected source image")
+    func render(_ strokes: [ImageMarkupStroke]) throws -> NSBitmapImageRep {
+        let data = try require(ImageMarkupRenderer.pngData(image: source, strokes: strokes), "Expected PNG")
+        return try require(NSBitmapImageRep(data: data), "Expected PNG bitmap")
+    }
+    func color(_ bitmap: NSBitmapImageRep, _ x: Int, _ y: Int) throws -> NSColor {
+        try require(bitmap.colorAt(x: x, y: bitmap.pixelsHigh - 1 - y)?.usingColorSpace(.sRGB), "Expected pixel color")
+    }
+    let line = ImageMarkupStroke(points: [CGPoint(x: 10, y: 48), CGPoint(x: 118, y: 48)], width: 32, color: .red)
+    let eraser = ImageMarkupStroke.eraser(points: [CGPoint(x: 64, y: 48)], brushWidth: 4)
+    var document = ImageMarkupDocument()
+    document.add(line)
+    document.add(eraser)
+    let erased = try render(document.strokes)
+    let center = try color(erased, 64, 48)
+    try expect(center.blueComponent > 0.9 && center.alphaComponent > 0.99, "Expected erasing to reveal the opaque source, not clear its pixels")
+    try expect(try color(erased, 70, 48).blueComponent > 0.9, "Expected erasing within the eight-pixel radius")
+    try expect(try color(erased, 74, 48).redComponent > 0.9, "Expected nearby markup outside the eraser to remain")
+    try expect(try color(erased, 70, 54).redComponent > 0.9, "Expected a circular eraser, not a square")
+    try expect(try color(erased, 20, 48).redComponent > 0.9, "Expected the rest of the line to remain")
+
+    document.undo()
+    try expect(try color(render(document.strokes), 64, 48).redComponent > 0.9, "Expected undo to restore erased pixels")
+    document.redo()
+    try expect(try color(render(document.strokes), 64, 48).blueComponent > 0.9, "Expected redo to re-erase the same pixels")
+    document.add(ImageMarkupStroke(points: [CGPoint(x: 64, y: 48)], width: 4, color: .green))
+    try expect(try color(render(document.strokes), 64, 48).greenComponent > 0.9, "Expected new drawing to cover a previously erased region")
+
+    let sweep = ImageMarkupStroke.eraser(points: [CGPoint(x: 40, y: 48), CGPoint(x: 80, y: 48)], brushWidth: 4)
+    let swept = try render([line, sweep])
+    try expect(try color(swept, 60, 48).blueComponent > 0.9, "Expected fast eraser motion to clear continuously between events")
+    try expect(try color(swept, 34, 48).blueComponent > 0.9, "Expected a round eraser end cap")
+    try expect(try color(swept, 92, 48).redComponent > 0.9, "Expected markup beyond the sweep to remain")
+
+    let arrow = ImageMarkupStroke(points: [CGPoint(x: 10, y: 80), CGPoint(x: 90, y: 80)], width: 4, color: .red, hasArrow: true)
+    let wing = try require(arrow.arrowPoints.first, "Expected an arrowhead wing")
+    let arrowBitmap = try render([arrow, .eraser(points: [wing], brushWidth: 4)])
+    try expect(try color(arrowBitmap, Int(wing.x), Int(wing.y)).blueComponent > 0.9, "Expected part of an arrowhead to erase")
+    try expect(try color(arrowBitmap, 40, 80).redComponent > 0.9, "Expected erasing an arrowhead not to delete its shaft")
+
+    let zoomContext = try require(CGContext(data: nil, width: 256, height: 192, bitsPerComponent: 8, bytesPerRow: 0,
+                                           space: CGColorSpaceCreateDeviceRGB(),
+                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue), "Expected zoom test context")
+    zoomContext.scaleBy(x: 2, y: 2)
+    zoomContext.draw(source, in: CGRect(origin: .zero, size: size))
+    ImageMarkupRenderer.draw([line, eraser], in: zoomContext)
+    let zoomed = NSBitmapImageRep(cgImage: try require(zoomContext.makeImage(), "Expected zoomed markup"))
+    try expect(try color(zoomed, 140, 96).blueComponent > 0.9, "Expected erased regions to scale with zoom")
+    try expect(try color(zoomed, 148, 96).redComponent > 0.9, "Expected zoomed surrounding markup to remain")
+
+    let untouched = try render([.eraser(points: [CGPoint(x: 64, y: 48)], brushWidth: 100)])
+    try expect(try color(untouched, 64, 48).blueComponent > 0.9, "Expected erasing without markup to leave the source intact")
+}
+
+private func testImageMarkupPNGAndClipboard() throws {
+    let context = try require(CGContext(data: nil, width: 64, height: 40, bitsPerComponent: 8, bytesPerRow: 0,
+                                       space: CGColorSpaceCreateDeviceRGB(),
+                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue), "Expected test bitmap")
+    context.setFillColor(NSColor.blue.cgColor)
+    context.fill(CGRect(x: 0, y: 0, width: 64, height: 40))
+    context.setFillColor(NSColor.green.cgColor)
+    context.fill(CGRect(x: 0, y: 20, width: 64, height: 20))
+    let source = try require(context.makeImage(), "Expected source bitmap")
+    let retinaImage = NSImage(cgImage: source, size: NSSize(width: 32, height: 20))
+    let extracted = try require(ImageMarkupRenderer.sourceImage(from: retinaImage), "Expected Retina source")
+    try expect(extracted.width == 64 && extracted.height == 40, "Expected source pixel dimensions rather than logical point dimensions")
+    let stroke = ImageMarkupStroke(points: [CGPoint(x: 10, y: 10), CGPoint(x: 54, y: 10)], width: 4, color: .red, hasArrow: true)
+    let png = try require(ImageMarkupRenderer.pngData(image: extracted, strokes: [stroke]), "Expected annotated PNG")
+    let bitmap = try require(NSBitmapImageRep(data: png), "Expected decodable PNG")
+    try expect(bitmap.pixelsWide == 64 && bitmap.pixelsHigh == 40, "Expected full-resolution export without toolbar or display scaling")
+    func color(_ x: Int, _ y: Int, in bitmap: NSBitmapImageRep) throws -> NSColor {
+        try require(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB), "Expected pixel color")
+    }
+    try expect(try color(30, 30, in: bitmap).redComponent > 0.9, "Expected the stroke in lower image coordinates")
+    try expect(try color(40, 22, in: bitmap).redComponent > 0.5, "Expected arrowhead in the exported PNG")
+    try expect(try color(30, 5, in: bitmap).greenComponent > 0.9, "Expected the source image to remain upright")
+    try expect(try color(30, 35, in: bitmap).blueComponent > 0.9, "Expected markup not to alter neighboring source pixels")
+    let cleanPNG = try require(ImageMarkupRenderer.pngData(image: extracted, strokes: []), "Expected clean PNG")
+    let clean = try require(NSBitmapImageRep(data: cleanPNG), "Expected clean bitmap")
+    try expect(try color(30, 30, in: clean).blueComponent > 0.9, "Expected erasing all markup to restore the unmodified image")
+
+    let scaled = try require(CGContext(data: nil, width: 128, height: 80, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue), "Expected zoom test bitmap")
+    scaled.scaleBy(x: 2, y: 2)
+    scaled.draw(extracted, in: CGRect(x: 0, y: 0, width: 64, height: 40))
+    ImageMarkupRenderer.draw([stroke], in: scaled)
+    let zoomed = NSBitmapImageRep(cgImage: try require(scaled.makeImage(), "Expected zoomed image"))
+    try expect(try color(60, 60, in: zoomed).redComponent > 0.9, "Expected zoom to scale stroke position")
+    try expect(try color(60, 57, in: zoomed).redComponent > 0.9, "Expected zoom to scale stroke thickness")
+    try expect(try color(60, 65, in: zoomed).blueComponent > 0.9, "Expected zoom not to stretch markup beyond its scaled width")
+
+    let pasteboard = namedPasteboard()
+    let item = NSPasteboardItem()
+    item.setData(png, forType: .png)
+    pasteboard.clearContents()
+    try requirePasteboardWrite(pasteboard.writeObjects([item]))
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+    let record = try require(try fixture.store.captureCurrentPasteboard(pasteboard), "Expected annotated image in Clipboard History")
+    let restored = namedPasteboard()
+    try fixture.store.restoreClip(id: record.id, to: restored)
+    try expect(restored.data(forType: .png) == png, "Expected the original annotated PNG to survive a clipboard-history round trip")
+}
+
 private func testShotFloatDefaultHotKey() throws {
     try expect(
         AppHotKey.defaultShotFloatValue.displayString == "Command-Shift-2",
@@ -2002,6 +2158,10 @@ private let tests: [(String, () throws -> Void)] = [
     ("Bryan Tools update script resolver", testBryanToolsUpdateScriptResolver),
     ("Bryan Tools auto start defaults", testBryanToolsAutoStartDefaultsAndLaunchAgent),
     ("ShotFloat default hotkey", testShotFloatDefaultHotKey),
+    ("ShotFloat markup undo/redo and erasing", testImageMarkupUndoRedoAndErase),
+    ("ShotFloat markup eraser geometry", testImageMarkupEraserGeometry),
+    ("ShotFloat pixel eraser, undo, and zoom", testImageMarkupPixelErasing),
+    ("ShotFloat markup PNG, zoom, and clipboard", testImageMarkupPNGAndClipboard),
     ("Screen OCR default hotkey", testScreenOCRDefaultHotKey),
     ("TrayCal tool identifier", testTrayCalToolIdentifier),
     ("Alarm tool identifier", testAlarmToolIdentifier),

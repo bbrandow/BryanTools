@@ -31,6 +31,7 @@ final class BryanToolsSettingsPanelController {
         )
         panel.title = "Bryan Tools Settings"
         panel.isReleasedWhenClosed = false
+        panel.isRestorable = false
         panel.collectionBehavior = [.canJoinAllSpaces]
         panel.contentView = NSHostingView(rootView: BryanToolsSettingsView(environment: environment))
         return panel

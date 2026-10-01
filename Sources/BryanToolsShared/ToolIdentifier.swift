@@ -14,6 +14,7 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
     case diskSpaceMonitor
     case utcHour
     case vehicleMotionCues
+    case monitorControl
 
     public var id: String {
         rawValue
@@ -47,6 +48,8 @@ public enum ToolIdentifier: String, CaseIterable, Codable, Identifiable {
             return "UTC Hour"
         case .vehicleMotionCues:
             return "Vehicle Motion Cues"
+        case .monitorControl:
+            return "Monitor Controls"
         }
     }
 

@@ -51,6 +51,36 @@ open "/Applications/Bryan Tools.app"
 | ShotFloat | `Shift-Command-2` | Capture a screen region into an always-on-top floating image |
 | Screen OCR | `Shift-Command-Y` | OCR a selected screen region into the clipboard |
 | MouseMacro | Settings UI | Map mouse buttons to keyboard macro sequences |
+| Monitor Controls | Keyboard brightness/volume keys | Control compatible external monitors without extra UI |
+
+## Monitor Controls
+
+Brightness, volume, and mute keys work with compatible external monitors while
+Bryan Tools is running. There is no additional tray icon or settings window.
+
+- Brightness keys adjust the monitor under the mouse pointer. With the pointer
+  on the built-in display, macOS keeps its normal brightness behavior.
+- Volume and mute keys control the monitor selected as the macOS sound output.
+  Built-in speakers, headphones, Bluetooth audio, and devices with native volume
+  control retain normal macOS behavior. Ambiguous multi-monitor audio matches
+  are left alone rather than changing the wrong monitor.
+- Hold a key to repeat; Option-Shift uses smaller increments. Mute sets monitor
+  volume to zero and pressing mute again restores the previous level.
+- Monitor connections and wake are handled automatically. Communication runs on
+  a background queue, with no continuous polling and no startup changes to levels.
+- Bryan Tools needs its existing Accessibility permission to intercept these keys.
+  Quit standalone MonitorControl to let Bryan Tools take over; it defers while
+  MonitorControl is running to avoid double adjustments.
+
+The monitor must support DDC/CI (and have it enabled in its own menu), and the
+USB-C/DisplayPort/HDMI connection or dock must pass those commands. A monitor
+with speakers must expose DDC volume control for HDMI/DisplayPort sound. Some
+Mac HDMI ports and DisplayLink docks do not support this hardware path. Apple
+displays retain native controls. Unsupported displays are not software-dimmed.
+This is a focused keyboard integration, not every MonitorControl feature.
+
+The hardware code is adapted from [MonitorControl](https://github.com/MonitorControl/MonitorControl).
+Attribution and MIT licenses are in `ThirdParty` and included in the installed app.
 
 ## TrayCal
 

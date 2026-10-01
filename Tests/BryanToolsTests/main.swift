@@ -2202,7 +2202,7 @@ private let tests: [(String, () throws -> Void)] = [
 ]
 
 var failures = 0
-for (name, test) in tests {
+for (name, test) in tests + MonitorControlTests.tests {
     do {
         try test()
         print("PASS \(name)")

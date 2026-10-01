@@ -13,6 +13,14 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "MonitorHardware",
+            linkerSettings: [.linkedFramework("IOKit"), .linkedFramework("CoreGraphics")]
+        ),
+        .target(
+            name: "MonitorControlCore",
+            dependencies: ["MonitorHardware"]
+        ),
+        .target(
             name: "BryanToolsShared",
             linkerSettings: [
                 .linkedLibrary("sqlite3")
@@ -30,7 +38,8 @@ let package = Package(
             name: "BryanTools",
             dependencies: [
                 "BryanToolsShared",
-                "ClipboardHistoryCore"
+                "ClipboardHistoryCore",
+                "MonitorControlCore"
             ],
             linkerSettings: [
                 .linkedFramework("Vision"),
@@ -41,7 +50,8 @@ let package = Package(
             name: "BryanToolsSelfTests",
             dependencies: [
                 "BryanToolsShared",
-                "ClipboardHistoryCore"
+                "ClipboardHistoryCore",
+                "MonitorControlCore"
             ],
             path: "Tests/BryanToolsTests",
             linkerSettings: [

@@ -16,6 +16,7 @@ rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_PATH/Contents/Info.plist"
+ditto "$ROOT_DIR/ThirdParty" "$APP_PATH/Contents/Resources/ThirdParty"
 cp "$BINARY_PATH" "$APP_PATH/Contents/MacOS/BryanTools"
 chmod +x "$APP_PATH/Contents/MacOS/BryanTools"
 

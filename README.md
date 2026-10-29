@@ -247,8 +247,8 @@ Features:
   pasteboard contents.
 - Re-copying the same visible text promotes its existing history item to the
   top, even when rich clipboard metadata differs.
-- Google Sheets cell copies are captured from their text and HTML
-  representations.
+- Google Docs and Sheets copies are captured from their text and HTML
+  representations, including generated or transient copies and plain-text-only cells.
 - HTML search text is extracted without rendering the document or loading
   embedded network resources; original HTML clipboard bytes remain preserved.
 - Searchable history panel.
@@ -276,12 +276,15 @@ Security and privacy:
 
 - Stored clipboard metadata, payloads, and thumbnails are encrypted at rest with
   AES-GCM using a Keychain-managed key.
-- Private pasteboard markers are skipped.
-- 1Password desktop app copies are skipped.
-- 1Password browser-extension copies are filtered through browser-source and
-  credential-shape detection.
-- Browser credential-like strings are skipped where possible, while normal text,
-  UUIDs, OTP-shaped values, and color hex codes remain capturable.
+- Copies from the 1Password desktop app, copies carrying 1Password-specific
+  markers, and content explicitly marked `org.nspasteboard.ConcealedType` are skipped.
+- Text is not classified as a password based on length, symbols, entropy, or
+  hyphenated words. Formulas, identifiers, and other normal browser text are captured.
+- Generated and transient clipboard markers no longer exclude a copy. The
+  markers themselves are omitted when restoring; original content formats remain intact.
+- Browser extensions do not always identify their copies. Unmarked passwords,
+  including ones from the 1Password extension, may therefore be saved. Pause
+  capture before copying sensitive text or delete unwanted entries afterward.
 
 Pop up on shortcut key:
 <img width="872" height="652" alt="image" src="https://github.com/user-attachments/assets/297e2804-1605-4a30-8529-048838d24ca2" />
@@ -650,6 +653,12 @@ Expected permissions:
 - Screen Recording: required for Color Picker, ShotFloat, and Screen OCR.
 - Input Monitoring may be requested by macOS for low-level input hooks depending
   on system version and security settings.
+- Clipboard access: if macOS asks whether Bryan Tools may paste from other apps,
+  allow it for background clipboard capture. macOS can deny programmatic clipboard
+  reads while still allowing a normal user-initiated paste. Review Bryan Tools'
+  clipboard access in System Settings if regular paste works but history stays empty.
+  This is separate from the app's privacy filtering. See Apple's
+  [pasteboard access behavior](https://developer.apple.com/documentation/appkit/nspasteboard/accessbehavior-swift.enum).
 
 If permissions behave unexpectedly, confirm they are granted to
 `/Applications/Bryan Tools.app`, then quit and relaunch the app.
